@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/apple-touch-icon.png",
   "/site.webmanifest",
   "/manifest.webmanifest",
+  "/api/reminders/due",
 ];
 const STATIC_FILE_PATTERN = /\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|webmanifest)$/;
 
