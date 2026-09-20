@@ -15,12 +15,24 @@ import {
 } from "@/lib/care-records";
 import { changePassword } from "@/lib/auth";
 import {
+  addExam,
   addCareRecord,
+  addMedicationOrder,
+  addReminder,
+  addVisit,
   clearCareRecords,
   deleteCareRecord,
+  deleteExam,
+  deleteMedicationOrder,
+  deleteReminder,
+  deleteVisit,
   getCareLog,
   seedDemoCareLog,
+  updateExam,
+  updateMedicationOrder,
   updateCareRecord,
+  updateReminder,
+  updateVisit,
 } from "@/lib/care-store";
 import { clearSessionCookie, requireCurrentUser } from "@/lib/session";
 
@@ -191,11 +203,169 @@ export async function changePasswordAction(formData: FormData) {
   redirect("/account?password=changed");
 }
 
+export async function saveReminderAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const now = new Date().toISOString();
+  const id = optionalString(formData, "id");
+  const reminder = {
+    id: id || createId(),
+    type: requiredString(formData, "type") as never,
+    dueAt: requiredString(formData, "dueAt"),
+    recurrence: requiredString(formData, "recurrence") as never,
+    linkedRecordId: optionalString(formData, "linkedRecordId") || undefined,
+    notes: optionalString(formData, "notes"),
+    completed: formData.get("completed") === "yes",
+    completedAt: optionalString(formData, "completedAt") || undefined,
+    completedBy: optionalString(formData, "completedBy") || undefined,
+    recordedBy: optionalString(formData, "recordedBy") || user.displayName,
+    createdAt: optionalString(formData, "createdAt") || now,
+    lastEditedBy: id ? user.displayName : undefined,
+    lastEditedAt: id ? now : undefined,
+  };
+
+  if (id) {
+    await updateReminder(id, () => reminder);
+  } else {
+    await addReminder(reminder);
+  }
+  revalidateCareViews();
+  redirect("/reminders");
+}
+
+export async function completeReminderAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const id = requiredString(formData, "id");
+  const now = new Date().toISOString();
+  await updateReminder(id, (reminder) => ({
+    ...reminder,
+    completed: true,
+    completedAt: now,
+    completedBy: user.displayName,
+    lastEditedBy: user.displayName,
+    lastEditedAt: now,
+  }));
+  revalidateCareViews();
+}
+
+export async function deleteReminderAction(formData: FormData) {
+  await requireCurrentUser();
+  await deleteReminder(requiredString(formData, "id"));
+  revalidateCareViews();
+}
+
+export async function saveMedicationOrderAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const now = new Date().toISOString();
+  const id = optionalString(formData, "id");
+  const order = {
+    id: id || createId(),
+    drugName: requiredString(formData, "drugName"),
+    dose: requiredString(formData, "dose"),
+    frequency: requiredString(formData, "frequency"),
+    route: requiredString(formData, "route") as never,
+    scheduleHint: requiredString(formData, "scheduleHint"),
+    startDate: requiredString(formData, "startDate"),
+    stopDate: optionalString(formData, "stopDate") || undefined,
+    notes: optionalString(formData, "notes"),
+    precautions: optionalString(formData, "precautions"),
+    status: requiredString(formData, "status") as never,
+    recordedBy: optionalString(formData, "recordedBy") || user.displayName,
+    createdAt: optionalString(formData, "createdAt") || now,
+    lastEditedBy: id ? user.displayName : undefined,
+    lastEditedAt: id ? now : undefined,
+  };
+  if (id) await updateMedicationOrder(id, () => order);
+  else await addMedicationOrder(order);
+  revalidateCareViews();
+  redirect("/meds");
+}
+
+export async function stopMedicationOrderAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const id = requiredString(formData, "id");
+  const now = new Date().toISOString();
+  await updateMedicationOrder(id, (order) => ({
+    ...order,
+    status: "已停",
+    stopDate: order.stopDate || now.slice(0, 10),
+    lastEditedBy: user.displayName,
+    lastEditedAt: now,
+  }));
+  revalidateCareViews();
+}
+
+export async function deleteMedicationOrderAction(formData: FormData) {
+  await requireCurrentUser();
+  await deleteMedicationOrder(requiredString(formData, "id"));
+  revalidateCareViews();
+}
+
+export async function saveExamAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const now = new Date().toISOString();
+  const id = optionalString(formData, "id");
+  const exam = {
+    id: id || createId(),
+    name: requiredString(formData, "name"),
+    datetime: requiredString(formData, "datetime"),
+    location: optionalString(formData, "location"),
+    resultSummary: optionalString(formData, "resultSummary"),
+    nextDue: optionalString(formData, "nextDue") || undefined,
+    status: requiredString(formData, "status") as never,
+    recordedBy: optionalString(formData, "recordedBy") || user.displayName,
+    createdAt: optionalString(formData, "createdAt") || now,
+    lastEditedBy: id ? user.displayName : undefined,
+    lastEditedAt: id ? now : undefined,
+  };
+  if (id) await updateExam(id, () => exam);
+  else await addExam(exam);
+  revalidateCareViews();
+  redirect("/exams");
+}
+
+export async function deleteExamAction(formData: FormData) {
+  await requireCurrentUser();
+  await deleteExam(requiredString(formData, "id"));
+  revalidateCareViews();
+}
+
+export async function saveVisitAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const now = new Date().toISOString();
+  const id = optionalString(formData, "id");
+  const visit = {
+    id: id || createId(),
+    department: requiredString(formData, "department"),
+    date: requiredString(formData, "date"),
+    doctor: optionalString(formData, "doctor") || undefined,
+    instructions: requiredString(formData, "instructions"),
+    followUpDate: optionalString(formData, "followUpDate") || undefined,
+    recordedBy: optionalString(formData, "recordedBy") || user.displayName,
+    createdAt: optionalString(formData, "createdAt") || now,
+    lastEditedBy: id ? user.displayName : undefined,
+    lastEditedAt: id ? now : undefined,
+  };
+  if (id) await updateVisit(id, () => visit);
+  else await addVisit(visit);
+  revalidateCareViews();
+  redirect("/visits");
+}
+
+export async function deleteVisitAction(formData: FormData) {
+  await requireCurrentUser();
+  await deleteVisit(requiredString(formData, "id"));
+  revalidateCareViews();
+}
+
 function revalidateCareViews() {
   revalidatePath("/");
   revalidatePath("/add");
   revalidatePath("/history");
   revalidatePath("/account");
+  revalidatePath("/reminders");
+  revalidatePath("/meds");
+  revalidatePath("/exams");
+  revalidatePath("/visits");
 }
 
 function buildEditedRecord(
@@ -338,4 +508,8 @@ function optionalInteger(formData: FormData, key: string) {
   }
 
   return value;
+}
+
+function createId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
