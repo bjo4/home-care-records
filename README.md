@@ -16,6 +16,12 @@ Warren 家庭使用的私密居家照顧紀錄 web app。介面以繁體中文�
 - 個別帳號登入：scrypt 密碼雜湊、httpOnly session cookie、登入失敗 lockout
 - 登入後記錄人/確認人鎖定為目前使用者，避免代填錯人
 - 登出與登入者改密碼表單
+- P0/P1 照護資料：
+  - `/reminders` 提醒：到期時間、重複、完成狀態、完成者
+  - `/meds` 用藥醫囑：進行中/已停、劑量、頻率、途徑、注意事項
+  - `/exams` 檢查：待做/完成/待報告、地點、結果摘要
+  - `/visits` 看診：科別、醫師、醫囑與下次回診
+- `/api/reminders/due`：回傳未來 48 小時未完成提醒，供瀏覽器 session 或外部 bot bearer token 使用
 - JSON file store：預設寫入 `.data/carelog.json`，適合家用 Node server behind Cloudflare Tunnel
 - Demo seed 與清空資料按鈕：可從空白開始，也可載入範例資料試看
 
@@ -71,6 +77,7 @@ PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,vickie:chang
 | `CARELOG_DATA_FILE` | `.data/carelog.json` | JSON 資料檔路徑 |
 | `CARELOG_BOOTSTRAP_USERS` | 無 | 當資料檔沒有任何 users 時建立初始帳號；格式：`username:password:DisplayName`，多筆用逗號分隔 |
 | `CARELOG_COOKIE_SECURE` | `false` | 設為 `true` 時 session cookie 加上 `Secure`；若本機用 `http://127.0.0.1:8800` 測試請維持 `false` |
+| `CARELOG_REMINDER_TOKEN` | 無 | 選填；外部 bot 可用 `Authorization: Bearer <token>` 呼叫 `/api/reminders/due` |
 
 範例：
 
@@ -92,6 +99,24 @@ Bootstrap only runs when the JSON store has zero users. After the first successf
 - Sessions use an `httpOnly` cookie named `carelog_session`; all app pages are protected except `/login` and static assets.
 - Failed login lockout: 5 failed attempts for the same username within 15 minutes locks that username for 10 minutes.
 - Logged-in users can change their own password from the home page.
+
+## Reminder API / 提醒 API
+
+```bash
+curl -H "Authorization: Bearer $CARELOG_REMINDER_TOKEN" \
+  http://127.0.0.1:8800/api/reminders/due
+```
+
+Response:
+
+```json
+{
+  "windowHours": 48,
+  "reminders": []
+}
+```
+
+Browser requests can also use the normal `carelog_session` cookie. Without a valid session or bearer token, the API returns `401`.
 
 ## 測試 / Tests
 
