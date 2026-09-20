@@ -7,13 +7,6 @@ import {
 } from "@/app/actions";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,15 +26,23 @@ type Props = {
 
 export function RecordForms({ caregiver, nowInput }: Props) {
   return (
-    <section id="quick-add" className="grid gap-4">
-      <div>
+    <section id="quick-add" className="grid gap-4 scroll-mt-24">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
         <p className="text-sm font-semibold text-emerald-700">快速新增</p>
         <h2 className="text-2xl font-bold tracking-tight">今天要記什麼？</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            先顯示常用動作；需要細項時再展開填寫。
+          </p>
+        </div>
+        <p className="rounded-full bg-white/80 px-3 py-2 text-xs font-semibold text-emerald-800 shadow-sm">
+          記錄人：{caregiver}
+        </p>
       </div>
 
       <QuickCleanDayForm caregiver={caregiver} nowInput={nowInput} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <TemperatureForm caregiver={caregiver} nowInput={nowInput} />
         <BloodPressureForm caregiver={caregiver} nowInput={nowInput} />
         <MedicationForm caregiver={caregiver} nowInput={nowInput} />
@@ -56,7 +57,7 @@ function QuickCleanDayForm({ caregiver, nowInput }: Props) {
   return (
     <form
       action={addSymptomsAction}
-      className="rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm"
+      className="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 to-cyan-50 p-4 shadow-sm"
     >
       <input type="hidden" name="recordedBy" defaultValue={caregiver} data-caregiver-input />
       <input type="hidden" name="datetime" value={nowInput} />
@@ -65,12 +66,13 @@ function QuickCleanDayForm({ caregiver, nowInput }: Props) {
       <input type="hidden" name="notes" value="今日無異狀" />
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
         <div>
-          <h3 className="text-lg font-bold text-sky-950">今日無異狀</h3>
-          <p className="text-sm text-sky-800">
-            晚上若沒有警訊症狀，可直接留下一筆乾淨紀錄。
+          <p className="text-xs font-bold text-sky-700">晚間最快動作</p>
+          <h3 className="text-2xl font-black text-sky-950">今日無異狀</h3>
+          <p className="mt-1 text-sm text-sky-800">
+            沒有嘔吐、頭痛、喘、咳血等警訊時，一鍵完成症狀紀錄。
           </p>
         </div>
-        <Button type="submit" size="lg" className="min-h-12 bg-sky-700 hover:bg-sky-800">
+        <Button type="submit" size="lg" className="min-h-14 rounded-2xl bg-sky-700 text-base hover:bg-sky-800">
           一鍵記錄
         </Button>
       </div>
@@ -147,7 +149,7 @@ function MedicationForm({ caregiver, nowInput }: Props) {
             list="medication-presets"
             defaultValue={MEDICATION_PRESETS[0].name}
             required
-            className="min-h-10 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus:ring-4 focus:ring-ring/25"
+            className="min-h-12 w-full rounded-xl border border-input bg-white px-3 text-base outline-none focus:ring-4 focus:ring-ring/25"
           />
           <datalist id="medication-presets">
             {MEDICATION_PRESETS.map((preset) => (
@@ -241,13 +243,21 @@ function FormCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="bg-white/95 shadow-sm">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <details className="group rounded-3xl border border-white/80 bg-white/95 shadow-sm open:ring-2 open:ring-emerald-200">
+      <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+        <span>
+          <span className="block text-lg font-black">{title}</span>
+          <span className="text-sm text-muted-foreground">{description}</span>
+        </span>
+        <span className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 group-open:hidden">
+          展開
+        </span>
+        <span className="hidden rounded-full bg-muted px-3 py-2 text-sm font-bold text-muted-foreground group-open:inline">
+          收合
+        </span>
+      </summary>
+      <div className="border-t bg-stone-50/60 px-4 py-4">{children}</div>
+    </details>
   );
 }
 
@@ -261,7 +271,7 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid gap-2">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
@@ -297,7 +307,7 @@ function NativeSelect({
       id={id}
       name={name}
       defaultValue={defaultValue}
-      className="min-h-10 w-full rounded-lg border border-input bg-white px-3 text-base outline-none focus:ring-4 focus:ring-ring/25"
+      className="min-h-12 w-full rounded-xl border border-input bg-white px-3 text-base outline-none focus:ring-4 focus:ring-ring/25"
     >
       {options.map((option) => (
         <option key={option} value={option}>
@@ -310,7 +320,7 @@ function NativeSelect({
 
 function ToggleLine({ name, label }: { name: string; label: string }) {
   return (
-    <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-white px-3 text-sm">
+    <label className="flex min-h-12 items-center gap-2 rounded-xl border border-border bg-white px-3 text-sm">
       <input name={name} type="checkbox" value="yes" className="size-4" />
       {label}
     </label>
@@ -319,7 +329,7 @@ function ToggleLine({ name, label }: { name: string; label: string }) {
 
 function SubmitButton({ children }: { children: ReactNode }) {
   return (
-    <Button type="submit" size="lg" className="mt-1 min-h-11">
+    <Button type="submit" size="lg" className="mt-1 min-h-12 rounded-2xl text-base">
       {children}
     </Button>
   );

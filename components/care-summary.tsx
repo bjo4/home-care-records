@@ -12,6 +12,8 @@ import {
   type BloodPressureRecord,
   type CareLogData,
   type CareRecord,
+  type MedicationRecord,
+  type SymptomsRecord,
   type TemperatureRecord,
   type WeightRecord,
 } from "@/lib/care-records";
@@ -25,9 +27,49 @@ export function TodaySummary({ data, todayEntries }: Props) {
   const latestTemperature = latestOfType<TemperatureRecord>(data, "temperature");
   const latestBp = latestOfType<BloodPressureRecord>(data, "bloodPressure");
   const latestWeight = latestOfType<WeightRecord>(data, "weight");
+  const alertCount = todayEntries.filter((record) => record.abnormal).length;
+  const todayMeds = todayEntries.filter(
+    (record): record is MedicationRecord => record.type === "medication",
+  );
+  const hasCleanDay = todayEntries.some(
+    (record): record is SymptomsRecord =>
+      record.type === "symptoms" && record.cleanDay,
+  );
+  const medStatus =
+    todayMeds.length === 0
+      ? "尚未記錄"
+      : todayMeds.some((record) => !record.taken)
+        ? "有未吃"
+        : "已確認";
 
   return (
-    <section className="grid gap-4">
+    <section id="today" className="grid gap-4 scroll-mt-24">
+      <div
+        className={`rounded-3xl border p-4 shadow-sm ${
+          alertCount > 0
+            ? "border-red-200 bg-red-50 text-red-950"
+            : "border-emerald-200 bg-emerald-50 text-emerald-950"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold">
+              {alertCount > 0 ? "今天有需要留意的紀錄" : "今天目前平穩"}
+            </p>
+            <h2 className="mt-1 text-2xl font-black">
+              {alertCount > 0 ? `${alertCount} 筆警示` : "沒有異常標示"}
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-center text-sm">
+            <span className="rounded-2xl bg-white/80 px-3 py-2 font-semibold">
+              吃藥：{medStatus}
+            </span>
+            <span className="rounded-2xl bg-white/80 px-3 py-2 font-semibold">
+              症狀：{hasCleanDay ? "無異狀" : "待確認"}
+            </span>
+          </div>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard
           title="今日筆數"
@@ -63,7 +105,7 @@ export function TodaySummary({ data, todayEntries }: Props) {
           {todayEntries.length === 0 ? (
             <EmptyState
               title="今天還沒有紀錄"
-              body="先選擇記錄人，使用下方快速新增。早上建議先記吃藥、體溫與血壓。"
+              body="登入者已自動帶入。早上可先記吃藥、體溫與血壓；晚上可一鍵記錄今日無異狀。"
             />
           ) : (
             <RecordList records={todayEntries} />
@@ -183,10 +225,16 @@ function MetricCard({
   abnormal?: boolean;
 }) {
   return (
-    <Card className={abnormal ? "border-red-200 bg-red-50" : "bg-white/95"}>
-      <CardContent className="grid gap-1">
+    <Card
+      className={
+        abnormal
+          ? "min-h-28 border-red-200 bg-red-50 shadow-sm"
+          : "min-h-28 bg-white/95 shadow-sm"
+      }
+    >
+      <CardContent className="grid gap-1 py-4">
         <span className="text-xs font-semibold text-muted-foreground">{title}</span>
-        <strong className="text-xl">{value}</strong>
+        <strong className="text-2xl leading-tight">{value}</strong>
         <span className={abnormal ? "text-xs text-red-700" : "text-xs text-muted-foreground"}>
           {helper}
         </span>
