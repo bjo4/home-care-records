@@ -31,7 +31,8 @@ export async function addTemperatureAction(formData: FormData) {
       notes: optionalString(formData, "notes"),
     }),
   );
-  revalidatePath("/");
+  revalidateCareViews();
+  redirect("/");
 }
 
 export async function addBloodPressureAction(formData: FormData) {
@@ -48,7 +49,8 @@ export async function addBloodPressureAction(formData: FormData) {
       notes: optionalString(formData, "notes"),
     }),
   );
-  revalidatePath("/");
+  revalidateCareViews();
+  redirect("/");
 }
 
 export async function addMedicationAction(formData: FormData) {
@@ -63,7 +65,8 @@ export async function addMedicationAction(formData: FormData) {
       notes: optionalString(formData, "notes"),
     }),
   );
-  revalidatePath("/");
+  revalidateCareViews();
+  redirect("/");
 }
 
 export async function addSymptomsAction(formData: FormData) {
@@ -84,7 +87,8 @@ export async function addSymptomsAction(formData: FormData) {
       notes: optionalString(formData, "notes"),
     }),
   );
-  revalidatePath("/");
+  revalidateCareViews();
+  redirect("/");
 }
 
 export async function addWeightAction(formData: FormData) {
@@ -99,19 +103,20 @@ export async function addWeightAction(formData: FormData) {
       notes: optionalString(formData, "notes"),
     }),
   );
-  revalidatePath("/");
+  revalidateCareViews();
+  redirect("/");
 }
 
 export async function seedDemoDataAction() {
   await requireCurrentUser();
   await seedDemoCareLog();
-  revalidatePath("/");
+  revalidateCareViews();
 }
 
 export async function clearDataAction() {
   await requireCurrentUser();
   await clearCareRecords();
-  revalidatePath("/");
+  revalidateCareViews();
 }
 
 export async function logoutAction() {
@@ -126,16 +131,23 @@ export async function changePasswordAction(formData: FormData) {
   const confirmPassword = requiredString(formData, "confirmPassword");
 
   if (nextPassword !== confirmPassword) {
-    redirect("/?password=confirm-mismatch");
+    redirect("/account?password=confirm-mismatch");
   }
 
   const result = await changePassword(user.id, currentPassword, nextPassword);
 
   if (!result.ok) {
-    redirect(`/?password=${result.reason}`);
+    redirect(`/account?password=${result.reason}`);
   }
 
-  redirect("/?password=changed");
+  redirect("/account?password=changed");
+}
+
+function revalidateCareViews() {
+  revalidatePath("/");
+  revalidatePath("/add");
+  revalidatePath("/history");
+  revalidatePath("/account");
 }
 
 function requiredString(formData: FormData, key: string) {

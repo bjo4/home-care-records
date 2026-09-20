@@ -1,0 +1,86 @@
+import { AppFrame } from "@/components/app-frame";
+import {
+  ADD_RECORD_OPTIONS,
+  QuickCleanDayForm,
+  SingleRecordForm,
+  type RecordKind,
+} from "@/components/record-forms";
+import { buttonVariants } from "@/components/ui/button";
+import { requireCurrentUser } from "@/lib/session";
+
+type Props = {
+  searchParams?: Promise<{
+    type?: string;
+  }>;
+};
+
+export default async function AddPage({ searchParams }: Props) {
+  const user = await requireCurrentUser();
+  const params = await searchParams;
+  const kind = normalizeKind(params?.type);
+  const nowInput = toDateTimeLocalInput(new Date());
+
+  return (
+    <AppFrame
+      active="add"
+      title={kind ? selectedTitle(kind) : "新增紀錄"}
+      description={
+        kind
+          ? "只填這一項，送出後回到今日摘要。"
+          : "先選一種紀錄。常用的「今日無異狀」可以直接一鍵完成。"
+      }
+    >
+      {kind ? (
+        <div className="grid gap-4">
+          <a
+            href="/add"
+            className="w-fit rounded-full bg-white/80 px-4 py-2 text-sm font-bold text-emerald-800 shadow-sm"
+          >
+            ← 回到種類
+          </a>
+          <SingleRecordForm kind={kind} caregiver={user.displayName} nowInput={nowInput} />
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          <QuickCleanDayForm caregiver={user.displayName} nowInput={nowInput} />
+          <section className="grid gap-3">
+            {ADD_RECORD_OPTIONS.map((option) => (
+              <a
+                key={option.kind}
+                href={`/add?type=${option.kind}`}
+                className="rounded-3xl border border-white/80 bg-white/95 p-4 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50"
+              >
+                <span className="block text-xl font-black text-stone-950">
+                  {option.title}
+                </span>
+                <span className="mt-1 block text-sm leading-6 text-muted-foreground">
+                  {option.description}
+                </span>
+                <span className={buttonVariants({ variant: "secondary", className: "mt-3 rounded-2xl" })}>
+                  開始填寫
+                </span>
+              </a>
+            ))}
+          </section>
+        </div>
+      )}
+    </AppFrame>
+  );
+}
+
+function normalizeKind(kind?: string): RecordKind | undefined {
+  return ADD_RECORD_OPTIONS.some((option) => option.kind === kind)
+    ? (kind as RecordKind)
+    : undefined;
+}
+
+function selectedTitle(kind: RecordKind) {
+  return ADD_RECORD_OPTIONS.find((option) => option.kind === kind)?.title ?? "新增紀錄";
+}
+
+function toDateTimeLocalInput(date: Date) {
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60_000);
+
+  return local.toISOString().slice(0, 16);
+}
