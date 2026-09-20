@@ -18,7 +18,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           parts=(.github/home-care-records.tar.xz.b64.part-*)
-          if [ "${#parts[@]}" -lt 3 ]; then
+          if [ "${#parts[@]}" -lt 13 ]; then
             echo "Archive parts are not all present yet; skipping."
             exit 0
           fi
