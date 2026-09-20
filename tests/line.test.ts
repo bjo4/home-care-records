@@ -253,7 +253,7 @@ test("agenda flex lists reminders, exams, and visits for the next 7 days", () =>
     reminders: [
       {
         id: "r-soon",
-        type: "量血糖",
+        type: "量血糖" as const,
         dueAt: "2026-09-21T18:00",
         recurrence: "none" as const,
         notes: "晚餐前",
@@ -263,7 +263,7 @@ test("agenda flex lists reminders, exams, and visits for the next 7 days", () =>
       },
       {
         id: "r-done",
-        type: "吃藥",
+        type: "吃藥" as const,
         dueAt: "2026-09-21T07:10",
         recurrence: "daily" as const,
         notes: "已完成不應出現",
@@ -273,7 +273,7 @@ test("agenda flex lists reminders, exams, and visits for the next 7 days", () =>
       },
       {
         id: "r-later",
-        type: "回診",
+        type: "回診" as const,
         dueAt: "2026-10-05T10:00",
         recurrence: "none" as const,
         notes: "超過 7 天",
