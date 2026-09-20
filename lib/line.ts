@@ -6,11 +6,13 @@ import {
   type CareLogData,
   type CareRecord,
   type CareReminder,
+  type ExamRecord,
   type LineBinding,
   type LinePendingInput,
   type LineSourceType,
+  type VisitRecord,
 } from "@/lib/care-records";
-import { addCareRecord, getCareLog, saveCareLog } from "@/lib/care-store";
+import { addCareRecord, getCareLog, getDueReminders, saveCareLog } from "@/lib/care-store";
 
 export type LineEventSource = {
   type?: string;
@@ -49,6 +51,14 @@ export type LineFlexMessage = {
 const FLEX_ITEMS_PER_BUBBLE = 8;
 const FLEX_MAX_BUBBLES = 10;
 const FLEX_ALT_TEXT_MAX = 400;
+const AGENDA_HOURS_AHEAD = 7 * 24;
+
+export type UpcomingAgendaItem = {
+  datetime: string;
+  type: string;
+  title: string;
+  notes: string;
+};
 
 export function verifyLineSignature(body: string, signature: string | null, secret: string) {
   if (!signature || !secret) return false;
@@ -89,6 +99,10 @@ export function isLineMenuCommand(text: string) {
 
 export function isTodayRecordsCommand(text: string) {
   return ["紀錄", "今日紀錄", "顯示紀錄"].includes(text.trim());
+}
+
+export function isAgendaCommand(text: string) {
+  return ["未來行程", "行程", "行程表"].includes(text.trim());
 }
 
 export async function createLineBindCode(userId: string, displayName: string) {
@@ -249,19 +263,20 @@ export function formatTodayRecordsSummary(data: CareLogData, today = new Date())
 export function buildMenuFlexMessage(): LineFlexMessage {
   return {
     type: "flex",
-    altText: "CareLog 選單：快速記錄與今日紀錄",
+    altText: "CareLog 選單：快速記錄、今日紀錄與未來行程",
     contents: flexBubble([
       flexTitle("CareLog"),
       flexMuted("選擇要記錄或查看的項目"),
-      flexSection("快速記錄", [
-        menuButton("體溫", "secondary", "action=quick&type=temperature"),
-        menuButton("血壓", "secondary", "action=quick&type=bloodPressure"),
-        menuButton("血糖", "secondary", "action=quick&type=bloodGlucose"),
-        menuButton("吃藥", "secondary", "action=quick&type=medication"),
-        menuButton("今日無異狀", "primary", "action=quick&type=cleanDay"),
+      flexSection("📝 快速記錄", [
+        menuButton("🌡️ 體溫", "secondary", "action=quick&type=temperature"),
+        menuButton("🩺 血壓", "secondary", "action=quick&type=bloodPressure"),
+        menuButton("🩸 血糖", "secondary", "action=quick&type=bloodGlucose"),
+        menuButton("💊 吃藥", "secondary", "action=quick&type=medication"),
+        menuButton("✅ 今日無異狀", "primary", "action=quick&type=cleanDay"),
       ]),
-      flexSection("查看", [
-        menuButton("今日紀錄", "primary", "action=records"),
+      flexSection("🔎 查看", [
+        menuButton("📋 今日紀錄", "primary", "action=records"),
+        menuButton("📅 未來行程", "secondary", "action=agenda"),
       ]),
     ]),
   };
@@ -301,6 +316,89 @@ export function buildTodayRecordsFlexMessage(data: CareLogData, today = new Date
   return {
     type: "flex",
     altText: truncateAlt(formatTodayRecordsSummary(data, today)),
+    contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
+  };
+}
+
+export function getUpcomingAgendaItems(
+  data: CareLogData,
+  now = new Date(),
+  hoursAhead = AGENDA_HOURS_AHEAD,
+): UpcomingAgendaItem[] {
+  const start = now.getTime();
+  const end = start + hoursAhead * 60 * 60 * 1000;
+  const items: UpcomingAgendaItem[] = getDueReminders(data, now, hoursAhead).map((reminder) => ({
+    datetime: reminder.dueAt,
+    type: "提醒",
+    title: reminder.type,
+    notes: reminder.notes,
+  }));
+
+  for (const exam of data.exams) {
+    const item = examAgendaItem(exam, start, end);
+    if (item) items.push(item);
+  }
+
+  for (const visit of data.visits) {
+    const item = visitAgendaItem(visit, start, end);
+    if (item) items.push(item);
+  }
+
+  return items.sort((a, b) => {
+    const byTime = agendaTimestamp(a.datetime) - agendaTimestamp(b.datetime);
+    return byTime !== 0 ? byTime : a.title.localeCompare(b.title, "zh-Hant");
+  });
+}
+
+export function formatAgendaSummary(data: CareLogData, now = new Date()) {
+  const items = getUpcomingAgendaItems(data, now);
+  if (items.length === 0) {
+    return "近期沒有行程";
+  }
+
+  const lines = items.slice(0, 20).map((item) => {
+    const notes = item.notes.trim() ? ` ${item.notes}` : "";
+    return `• ${formatAgendaTime(item.datetime)} ${item.type} ${item.title}${notes}`;
+  });
+  const extra =
+    items.length > 20 ? `\n…還有 ${items.length - 20} 筆，請到 CareLog 查看完整列表。` : "";
+  return `未來行程共 ${items.length} 筆\n${lines.join("\n")}${extra}`;
+}
+
+export function buildAgendaFlexMessage(data: CareLogData, now = new Date()): LineFlexMessage {
+  const items = getUpcomingAgendaItems(data, now);
+  if (items.length === 0) {
+    return {
+      type: "flex",
+      altText: "近期沒有行程",
+      contents: flexBubble([
+        flexTitle("未來行程"),
+        flexMuted("近期沒有行程"),
+        flexMuted("可用選單查看今日紀錄，或到 CareLog 新增提醒、檢查與看診。"),
+      ]),
+    };
+  }
+
+  const bubbles = chunkForFlex(items).map((chunkItems, index, all) => {
+    const extra =
+      index === all.length - 1 && items.length > recordsShownLimit()
+        ? items.length - recordsShownLimit()
+        : 0;
+    const rows = chunkItems.flatMap((item, rowIndex) => [
+      ...(rowIndex === 0 ? [] : [flexSeparator()]),
+      agendaFlexRow(item),
+    ]);
+    return flexBubble([
+      flexTitle(all.length > 1 ? `未來行程（${index + 1}/${all.length}）` : "未來行程"),
+      flexMuted(`共 ${items.length} 筆（未來 7 天）`),
+      ...rows,
+      ...(extra > 0 ? [flexMuted(`…還有 ${extra} 筆，請到 CareLog 查看完整列表。`)] : []),
+    ]);
+  });
+
+  return {
+    type: "flex",
+    altText: truncateAlt(formatAgendaSummary(data, now)),
     contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
   };
 }
@@ -387,6 +485,85 @@ function recordFlexRow(record: CareRecord) {
       { type: "text", text: recordPerson(record), size: "xs", color: "#888888" },
     ],
   };
+}
+
+function agendaFlexRow(item: UpcomingAgendaItem) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    contents: [
+      {
+        type: "box",
+        layout: "baseline",
+        spacing: "sm",
+        contents: [
+          { type: "text", text: formatAgendaTime(item.datetime), size: "sm", color: "#0F766E", weight: "bold", flex: 3 },
+          { type: "text", text: item.type, size: "sm", weight: "bold", flex: 2, wrap: true },
+          { type: "text", text: item.title, size: "sm", wrap: true, flex: 4 },
+        ],
+      },
+      ...(item.notes.trim()
+        ? [{ type: "text", text: item.notes, size: "xs", color: "#888888", wrap: true }]
+        : []),
+    ],
+  };
+}
+
+function examAgendaItem(exam: ExamRecord, start: number, end: number): UpcomingAgendaItem | null {
+  if (inAgendaWindow(exam.datetime, start, end)) {
+    return {
+      datetime: exam.datetime,
+      type: "檢查",
+      title: exam.name,
+      notes: [exam.location, exam.status].filter(Boolean).join("｜"),
+    };
+  }
+  if (exam.nextDue && inAgendaWindow(exam.nextDue, start, end)) {
+    return {
+      datetime: exam.nextDue,
+      type: "檢查",
+      title: exam.name,
+      notes: "下次追蹤",
+    };
+  }
+  return null;
+}
+
+function visitAgendaItem(visit: VisitRecord, start: number, end: number): UpcomingAgendaItem | null {
+  if (inAgendaWindow(visit.date, start, end)) {
+    return {
+      datetime: visit.date,
+      type: "看診",
+      title: visitTitle(visit),
+      notes: visit.instructions,
+    };
+  }
+  if (visit.followUpDate && inAgendaWindow(visit.followUpDate, start, end)) {
+    return {
+      datetime: visit.followUpDate,
+      type: "回診",
+      title: visitTitle(visit),
+      notes: visit.instructions,
+    };
+  }
+  return null;
+}
+
+function visitTitle(visit: VisitRecord) {
+  return visit.doctor ? `${visit.department}｜${visit.doctor}` : visit.department;
+}
+
+function inAgendaWindow(value: string, start: number, end: number) {
+  const time = agendaTimestamp(value);
+  return Number.isFinite(time) && time >= start && time <= end;
+}
+
+function agendaTimestamp(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T00:00:00`).getTime();
+  }
+  return new Date(value).getTime();
 }
 
 function reminderFlexRow(reminder: CareReminder) {
@@ -476,6 +653,19 @@ function formatReminderTime(value: string) {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(value));
+}
+
+function formatAgendaTime(value: string) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
+  return new Intl.DateTimeFormat("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function toLocalInput(date: Date) {

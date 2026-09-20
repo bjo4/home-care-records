@@ -10,6 +10,7 @@ import { createRecord } from "../lib/care-records";
 import { addCareRecord, emptyCareLogData, getCareLog, saveCareLog } from "../lib/care-store";
 import {
   bindLineUser,
+  buildAgendaFlexMessage,
   buildDueRemindersFlexMessage,
   buildMenuFlexMessage,
   buildTodayRecordsFlexMessage,
@@ -19,6 +20,7 @@ import {
   formatTodayRecordsSummary,
   getLineConversation,
   getLinePushTargets,
+  isAgendaCommand,
   isLineMenuCommand,
   isTodayRecordsCommand,
   setPendingLineInput,
@@ -193,15 +195,15 @@ test("leave unbinds a group conversation without removing 1:1 binding", async ()
   }
 });
 
-test("menu flex splits 快速記錄 and 查看, and keeps one today-records postback", () => {
+test("menu flex uses emoji labels and includes 未來行程 under 查看", () => {
   const menu = buildMenuFlexMessage();
   assert.equal(menu.type, "flex");
   assert.match(menu.altText, /CareLog/);
-  assert.match(menu.altText, /快速記錄|今日紀錄|選單/);
+  assert.match(menu.altText, /快速記錄|今日紀錄|未來行程|選單/);
 
   const texts = collectFlexTexts(menu);
-  assert.equal(texts.includes("快速記錄"), true);
-  assert.equal(texts.includes("查看"), true);
+  assert.equal(texts.some((text) => text.includes("快速記錄")), true);
+  assert.equal(texts.some((text) => text.includes("查看")), true);
   assert.equal(texts.includes("顯示紀錄"), false);
 
   const buttons = collectFlexButtons(menu);
@@ -210,19 +212,150 @@ test("menu flex splits 快速記錄 and 查看, and keeps one today-records post
       .filter((button) => button.data.startsWith("action=quick"))
       .map((button) => ({ label: button.label, data: button.data, style: button.style })),
     [
-      { label: "體溫", data: "action=quick&type=temperature", style: "secondary" },
-      { label: "血壓", data: "action=quick&type=bloodPressure", style: "secondary" },
-      { label: "血糖", data: "action=quick&type=bloodGlucose", style: "secondary" },
-      { label: "吃藥", data: "action=quick&type=medication", style: "secondary" },
-      { label: "今日無異狀", data: "action=quick&type=cleanDay", style: "primary" },
+      { label: "🌡️ 體溫", data: "action=quick&type=temperature", style: "secondary" },
+      { label: "🩺 血壓", data: "action=quick&type=bloodPressure", style: "secondary" },
+      { label: "🩸 血糖", data: "action=quick&type=bloodGlucose", style: "secondary" },
+      { label: "💊 吃藥", data: "action=quick&type=medication", style: "secondary" },
+      { label: "✅ 今日無異狀", data: "action=quick&type=cleanDay", style: "primary" },
     ],
   );
 
   const recordButtons = buttons.filter((button) => button.data === "action=records");
   assert.equal(recordButtons.length, 1);
-  assert.equal(recordButtons[0]?.label, "今日紀錄");
+  assert.equal(recordButtons[0]?.label, "📋 今日紀錄");
+
+  const agendaButtons = buttons.filter((button) => button.data === "action=agenda");
+  assert.equal(agendaButtons.length, 1);
+  assert.equal(agendaButtons[0]?.label, "📅 未來行程");
   assert.equal(buttons.some((button) => button.label === "顯示紀錄"), false);
   assert.equal(collectFlexSeparators(menu) >= 1, true);
+});
+
+test("agenda commands accept 未來行程 aliases", () => {
+  assert.equal(isAgendaCommand("未來行程"), true);
+  assert.equal(isAgendaCommand("行程"), true);
+  assert.equal(isAgendaCommand("行程表"), true);
+  assert.equal(isAgendaCommand("今日紀錄"), false);
+  assert.equal(isAgendaCommand("選單"), false);
+});
+
+test("agenda flex empty state says 近期沒有行程", () => {
+  const flex = buildAgendaFlexMessage(emptyCareLogData(), new Date("2026-09-20T12:00:00+08:00"));
+  assert.equal(flex.type, "flex");
+  assert.equal(flex.contents.type, "bubble");
+  assert.match(flex.altText, /近期沒有行程/);
+  assert.equal(collectFlexTexts(flex).includes("近期沒有行程"), true);
+});
+
+test("agenda flex lists reminders, exams, and visits for the next 7 days", () => {
+  const data = {
+    ...emptyCareLogData(),
+    reminders: [
+      {
+        id: "r-soon",
+        type: "量血糖" as const,
+        dueAt: "2026-09-21T18:00",
+        recurrence: "none" as const,
+        notes: "晚餐前",
+        completed: false,
+        recordedBy: "Warren",
+        createdAt: "2026-09-20T08:00:00.000Z",
+      },
+      {
+        id: "r-done",
+        type: "吃藥" as const,
+        dueAt: "2026-09-21T07:10",
+        recurrence: "daily" as const,
+        notes: "已完成不應出現",
+        completed: true,
+        recordedBy: "姐姐",
+        createdAt: "2026-09-20T08:00:00.000Z",
+      },
+      {
+        id: "r-later",
+        type: "回診" as const,
+        dueAt: "2026-10-05T10:00",
+        recurrence: "none" as const,
+        notes: "超過 7 天",
+        completed: false,
+        recordedBy: "Warren",
+        createdAt: "2026-09-20T08:00:00.000Z",
+      },
+    ],
+    exams: [
+      {
+        id: "e1",
+        name: "胸部 X 光",
+        datetime: "2026-09-22T09:30",
+        location: "台大醫院",
+        resultSummary: "",
+        status: "待做" as const,
+        recordedBy: "Warren",
+        createdAt: "2026-09-20T08:00:00.000Z",
+      },
+    ],
+    visits: [
+      {
+        id: "v1",
+        department: "心臟內科",
+        date: "2026-08-01",
+        doctor: "林醫師",
+        instructions: "持續追蹤心律",
+        followUpDate: "2026-09-24",
+        recordedBy: "姐姐",
+        createdAt: "2026-09-20T08:00:00.000Z",
+      },
+    ],
+  };
+
+  const flex = buildAgendaFlexMessage(data, new Date("2026-09-20T12:00:00+08:00"));
+  assert.equal(flex.type, "flex");
+  assert.equal(flex.contents.type, "bubble");
+  assert.match(flex.altText, /未來行程共 3 筆/);
+  const texts = collectFlexTexts(flex);
+  assert.equal(texts.some((text) => text.includes("未來行程")), true);
+  assert.equal(texts.some((text) => text.includes("提醒") && texts.some((item) => item.includes("量血糖"))), true);
+  assert.equal(texts.some((text) => text.includes("量血糖")), true);
+  assert.equal(texts.some((text) => text.includes("晚餐前")), true);
+  assert.equal(texts.some((text) => text.includes("檢查") && texts.some((item) => item.includes("胸部 X 光"))), true);
+  assert.equal(texts.some((text) => text.includes("胸部 X 光")), true);
+  assert.equal(texts.some((text) => text.includes("回診") || text.includes("看診")), true);
+  assert.equal(texts.some((text) => text.includes("心臟內科")), true);
+  assert.equal(texts.some((text) => text.includes("已完成不應出現")), false);
+  assert.equal(texts.some((text) => text.includes("超過 7 天")), false);
+  assert.equal(texts.some((text) => /\d{2}:\d{2}|\d{2}\/\d{2}/.test(text)), true);
+
+  const joined = texts.join("\n");
+  const glucoseAt = joined.indexOf("量血糖");
+  const examAt = joined.indexOf("胸部 X 光");
+  const visitAt = joined.indexOf("心臟內科");
+  assert.equal(glucoseAt >= 0 && examAt > glucoseAt && visitAt > examAt, true);
+});
+
+test("agenda flex uses a carousel when there are many items", () => {
+  const data = {
+    ...emptyCareLogData(),
+    reminders: Array.from({ length: 12 }, (_, index) => ({
+      id: `r${index}`,
+      type: "其他" as const,
+      dueAt: `2026-09-2${String(1 + (index % 6))}T${String(index).padStart(2, "0")}:00`,
+      recurrence: "none" as const,
+      notes: `行程 ${index + 1}`,
+      completed: false,
+      recordedBy: "Warren",
+      createdAt: "2026-09-20T08:00:00.000Z",
+    })),
+  };
+
+  const flex = buildAgendaFlexMessage(data, new Date("2026-09-20T12:00:00+08:00"));
+  assert.equal(flex.type, "flex");
+  assert.equal(flex.contents.type, "carousel");
+  assert.equal(Array.isArray(flex.contents.contents), true);
+  assert.equal((flex.contents.contents as unknown[]).length > 1, true);
+  assert.equal(
+    (flex.contents.contents as { type: string }[]).every((item) => item.type === "bubble"),
+    true,
+  );
 });
 
 test("today records commands and summary cover vitals, meds, and symptoms", async () => {
