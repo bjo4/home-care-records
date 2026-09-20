@@ -72,6 +72,29 @@ test("blood pressure pulse is optional", () => {
   assert.equal(record.abnormal, false);
 });
 
+test("blood glucose records keep meal timing and flag attention ranges", () => {
+  const high = createRecord("bloodGlucose", {
+    datetime: "2026-09-20T08:45",
+    value: 186,
+    mealTiming: "飯後",
+    recordedBy: "Warren",
+    notes: "早餐後",
+  });
+
+  const normal = createRecord("bloodGlucose", {
+    datetime: "2026-09-20T12:00",
+    value: 98,
+    mealTiming: "飯前",
+    recordedBy: "姐姐",
+    notes: "",
+  });
+
+  assert.equal(high.type, "bloodGlucose");
+  assert.equal(high.abnormal, true);
+  assert.equal(normal.abnormal, false);
+  assert.equal(normal.mealTiming, "飯前");
+});
+
 test("medication presets include editable morning medicines and steroid note", () => {
   assert.deepEqual(
     MEDICATION_PRESETS.map((preset) => preset.name),
@@ -166,6 +189,7 @@ test("demo data contains every MVP record type", () => {
   const types = new Set(buildDemoData().records.map((record) => record.type));
 
   assert.deepEqual([...types].sort(), [
+    "bloodGlucose",
     "bloodPressure",
     "medication",
     "symptoms",

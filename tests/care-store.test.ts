@@ -57,6 +57,7 @@ test("demo seed writes all MVP record types only when store is empty", async () 
     const types = new Set(seeded.records.map((record) => record.type));
 
     assert.deepEqual([...types].sort(), [
+      "bloodGlucose",
       "bloodPressure",
       "medication",
       "symptoms",
