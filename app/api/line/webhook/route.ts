@@ -4,6 +4,7 @@ import { createRecord } from "@/lib/care-records";
 import { addCareRecord, getCareLog } from "@/lib/care-store";
 import {
   bindLineUser,
+  buildMenuFlexMessage,
   buildTodayRecordsFlexMessage,
   createCareRecordFromLineText,
   findLineBinding,
@@ -50,7 +51,7 @@ async function handleEvent(event: LineEvent) {
       conversation?.sourceType === "group" || conversation?.sourceType === "room"
         ? "把帳號頁的綁定碼貼在這個群，即可綁定家庭群組並接收提醒。"
         : "請先在 CareLog 帳號頁產生綁定碼並傳給我。";
-    return reply(event.replyToken, [menuMessage(), { type: "text", text: hint }]);
+    return reply(event.replyToken, [buildMenuFlexMessage(), { type: "text", text: hint }]);
   }
 
   if (!conversation) return;
@@ -59,7 +60,7 @@ async function handleEvent(event: LineEvent) {
 
   if (event.type === "message" && event.message?.type === "text") {
     const text = (event.message.text ?? "").trim();
-    if (isLineMenuCommand(text)) return reply(event.replyToken, [menuMessage()]);
+    if (isLineMenuCommand(text)) return reply(event.replyToken, [buildMenuFlexMessage()]);
     if (isTodayRecordsCommand(text)) {
       return replyTodayRecords(event.replyToken, conversationId, senderUserId);
     }
@@ -134,48 +135,6 @@ async function replyTodayRecords(
     return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
   }
   return reply(replyToken, [buildTodayRecordsFlexMessage(careData)]);
-}
-
-function menuMessage() {
-  return {
-    type: "flex",
-    altText: "CareLog 快速記錄選單",
-    contents: {
-      type: "bubble",
-      body: {
-        type: "box",
-        layout: "vertical",
-        spacing: "md",
-        contents: [
-          { type: "text", text: "CareLog 快速記錄", weight: "bold", size: "lg" },
-          { type: "text", text: "選擇要記錄的項目，或查看今日紀錄", size: "sm", color: "#666666" },
-          button("體溫", "temperature"),
-          button("血壓", "bloodPressure"),
-          button("血糖", "bloodGlucose"),
-          button("吃藥", "medication"),
-          button("今日無異狀", "cleanDay"),
-          recordsButton("顯示紀錄"),
-          recordsButton("今日紀錄"),
-        ],
-      },
-    },
-  };
-}
-
-function button(label: string, type: string) {
-  return {
-    type: "button",
-    style: type === "cleanDay" ? "primary" : "secondary",
-    action: { type: "postback", label, data: `action=quick&type=${type}` },
-  };
-}
-
-function recordsButton(label: string) {
-  return {
-    type: "button",
-    style: "primary",
-    action: { type: "postback", label, data: "action=records" },
-  };
 }
 
 function promptFor(kind: string) {

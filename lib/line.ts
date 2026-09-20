@@ -246,6 +246,27 @@ export function formatTodayRecordsSummary(data: CareLogData, today = new Date())
   return `今日紀錄共 ${entries.length} 筆\n${lines.join("\n")}${extra}`;
 }
 
+export function buildMenuFlexMessage(): LineFlexMessage {
+  return {
+    type: "flex",
+    altText: "CareLog 選單：快速記錄與今日紀錄",
+    contents: flexBubble([
+      flexTitle("CareLog"),
+      flexMuted("選擇要記錄或查看的項目"),
+      flexSection("快速記錄", [
+        menuButton("體溫", "secondary", "action=quick&type=temperature"),
+        menuButton("血壓", "secondary", "action=quick&type=bloodPressure"),
+        menuButton("血糖", "secondary", "action=quick&type=bloodGlucose"),
+        menuButton("吃藥", "secondary", "action=quick&type=medication"),
+        menuButton("今日無異狀", "primary", "action=quick&type=cleanDay"),
+      ]),
+      flexSection("查看", [
+        menuButton("今日紀錄", "primary", "action=records"),
+      ]),
+    ]),
+  };
+}
+
 export function buildTodayRecordsFlexMessage(data: CareLogData, today = new Date()): LineFlexMessage {
   const entries = getTodayEntries(data, today);
   if (entries.length === 0) {
@@ -377,6 +398,27 @@ function reminderFlexRow(reminder: CareReminder) {
     contents.push({ type: "text", text: reminder.notes, size: "sm", wrap: true });
   }
   return { type: "box", layout: "vertical", spacing: "xs", contents };
+}
+
+function flexSection(title: string, contents: unknown[]) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    contents: [
+      { type: "text", text: title, weight: "bold", size: "sm", color: "#0F766E" },
+      flexSeparator(),
+      ...contents,
+    ],
+  };
+}
+
+function menuButton(label: string, style: "primary" | "secondary", data: string) {
+  return {
+    type: "button",
+    style,
+    action: { type: "postback", label, data },
+  };
 }
 
 function flexBubble(contents: unknown[]): LineFlexBubble {
