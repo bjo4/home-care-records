@@ -1,5 +1,5 @@
 import { AppFrame, PrimaryLink } from "@/components/app-frame";
-import { TodaySummary } from "@/components/care-summary";
+import { TodaySummary, VitalCharts } from "@/components/care-summary";
 import { QuickCleanDayForm } from "@/components/record-forms";
 import { getTodayEntries } from "@/lib/care-records";
 import { getCareLog } from "@/lib/care-store";
@@ -19,6 +19,7 @@ export default async function Home() {
       actions={<PrimaryLink href="/add">去記錄</PrimaryLink>}
     >
       <TodaySummary data={data} todayEntries={todayEntries} />
+      <VitalCharts data={data} />
       <QuickCleanDayForm caregiver={user.displayName} nowInput={nowInput} />
     </AppFrame>
   );

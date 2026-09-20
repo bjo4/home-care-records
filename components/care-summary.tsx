@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { AlertTriangle, CircleCheckBig } from "lucide-react";
 import type { ReactNode } from "react";
 import {
+  ABNORMAL_THRESHOLDS,
   type BloodPressureRecord,
   type CareLogData,
   type CareRecord,
@@ -131,9 +132,6 @@ export function HistorySection({ data }: { data: CareLogData }) {
   const records = [...data.records].sort((a, b) =>
     b.datetime.localeCompare(a.datetime),
   );
-  const temperatures = recordsOfType<TemperatureRecord>(data, "temperature");
-  const bloodPressures = recordsOfType<BloodPressureRecord>(data, "bloodPressure");
-  const weights = recordsOfType<WeightRecord>(data, "weight");
 
   return (
     <section id="history" className="grid gap-4">
@@ -165,61 +163,109 @@ export function HistorySection({ data }: { data: CareLogData }) {
           </span>
         </summary>
         <div className="grid gap-4 border-t bg-stone-50/60 p-4">
-          <TrendCard title="體溫趨勢" description="°C，37.5 以上警示">
-            <LineChart
-              series={[
-                {
-                  label: "體溫",
-                  color: "#dc2626",
-                  points: temperatures.map((record) => ({
-                    label: formatShortDateTime(record.datetime),
-                    value: record.value,
-                  })),
-                },
-              ]}
-              suffix="°C"
-            />
-          </TrendCard>
-          <TrendCard title="血壓趨勢" description="收縮壓 / 舒張壓">
-            <LineChart
-              series={[
-                {
-                  label: "收縮壓",
-                  color: "#2563eb",
-                  points: bloodPressures.map((record) => ({
-                    label: formatShortDateTime(record.datetime),
-                    value: record.systolic,
-                  })),
-                },
-                {
-                  label: "舒張壓",
-                  color: "#16a34a",
-                  points: bloodPressures.map((record) => ({
-                    label: formatShortDateTime(record.datetime),
-                    value: record.diastolic,
-                  })),
-                },
-              ]}
-              suffix=" mmHg"
-            />
-          </TrendCard>
-          <TrendCard title="體重趨勢" description="kg">
-            <LineChart
-              series={[
-                {
-                  label: "體重",
-                  color: "#7c3aed",
-                  points: weights.map((record) => ({
-                    label: formatShortDateTime(record.datetime),
-                    value: record.value,
-                  })),
-                },
-              ]}
-              suffix="kg"
-            />
-          </TrendCard>
+          <VitalCharts data={data} compact />
         </div>
       </details>
+    </section>
+  );
+}
+
+export function VitalCharts({
+  data,
+  compact = false,
+}: {
+  data: CareLogData;
+  compact?: boolean;
+}) {
+  const temperatures = recordsOfType<TemperatureRecord>(data, "temperature");
+  const bloodPressures = recordsOfType<BloodPressureRecord>(data, "bloodPressure");
+  const weights = recordsOfType<WeightRecord>(data, "weight");
+
+  return (
+    <section className="grid gap-4">
+      {!compact ? (
+        <div>
+          <p className="text-sm font-semibold text-emerald-700">趨勢</p>
+          <h2 className="text-2xl font-bold tracking-tight">生命徵象走勢</h2>
+        </div>
+      ) : null}
+      <TrendCard title="體溫趨勢" description="虛線：發燒警示 37.5°C">
+        <LineChart
+          series={[
+            {
+              label: "體溫",
+              color: "#dc2626",
+              points: temperatures.map((record) => ({
+                label: formatShortDateTime(record.datetime),
+                value: record.value,
+              })),
+            },
+          ]}
+          suffix="°C"
+          referenceLines={[
+            {
+              value: ABNORMAL_THRESHOLDS.temperature.feverC,
+              label: "發燒線",
+              color: "#dc2626",
+            },
+          ]}
+        />
+      </TrendCard>
+      <TrendCard title="血壓趨勢" description="虛線：高標/低標">
+        <LineChart
+          series={[
+            {
+              label: "收縮壓",
+              color: "#2563eb",
+              points: bloodPressures.map((record) => ({
+                label: formatShortDateTime(record.datetime),
+                value: record.systolic,
+              })),
+            },
+            {
+              label: "舒張壓",
+              color: "#16a34a",
+              points: bloodPressures.map((record) => ({
+                label: formatShortDateTime(record.datetime),
+                value: record.diastolic,
+              })),
+            },
+          ]}
+          suffix=" mmHg"
+          referenceLines={[
+            {
+              value: ABNORMAL_THRESHOLDS.bloodPressure.highSystolic,
+              label: "高收",
+              color: "#dc2626",
+            },
+            {
+              value: ABNORMAL_THRESHOLDS.bloodPressure.highDiastolic,
+              label: "高舒/低收",
+              color: "#f97316",
+            },
+            {
+              value: ABNORMAL_THRESHOLDS.bloodPressure.lowDiastolic,
+              label: "低舒",
+              color: "#0f766e",
+            },
+          ]}
+        />
+      </TrendCard>
+      <TrendCard title="體重趨勢" description="目前不設定固定醫療範圍">
+        <LineChart
+          series={[
+            {
+              label: "體重",
+              color: "#7c3aed",
+              points: weights.map((record) => ({
+                label: formatShortDateTime(record.datetime),
+                value: record.value,
+              })),
+            },
+          ]}
+          suffix="kg"
+        />
+      </TrendCard>
     </section>
   );
 }
@@ -322,6 +368,7 @@ function TrendCard({
 function LineChart({
   series,
   suffix,
+  referenceLines = [],
 }: {
   series: {
     label: string;
@@ -329,6 +376,7 @@ function LineChart({
     points: { label: string; value: number }[];
   }[];
   suffix: string;
+  referenceLines?: { value: number; label: string; color: string }[];
 }) {
   const allPoints = series.flatMap((item) => item.points);
 
@@ -339,7 +387,10 @@ function LineChart({
   const width = 320;
   const height = 150;
   const padding = 24;
-  const values = allPoints.map((point) => point.value);
+  const values = [
+    ...allPoints.map((point) => point.value),
+    ...referenceLines.map((line) => line.value),
+  ];
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -364,6 +415,34 @@ function LineChart({
       >
         <line x1={padding} x2={width - padding} y1={height - padding} y2={height - padding} stroke="#d4d4d8" />
         <line x1={padding} x2={padding} y1={padding} y2={height - padding} stroke="#d4d4d8" />
+        {referenceLines.map((line) => {
+          const pointXY = xy(line.value, 0, 1);
+
+          return (
+            <g key={`${line.label}-${line.value}`}>
+              <line
+                x1={padding}
+                x2={width - padding}
+                y1={pointXY.y}
+                y2={pointXY.y}
+                stroke={line.color}
+                strokeDasharray="4 4"
+                strokeOpacity="0.45"
+                strokeWidth="1.5"
+              />
+              <text
+                x={width - padding}
+                y={Math.max(12, pointXY.y - 4)}
+                fill={line.color}
+                fontSize="10"
+                fontWeight="700"
+                textAnchor="end"
+              >
+                {line.label}
+              </text>
+            </g>
+          );
+        })}
         {series.map((item) => {
           const pathData = item.points
             .map((point, index) => {
