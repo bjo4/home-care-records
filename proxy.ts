@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 
-const PUBLIC_PATHS = ["/login"];
-const STATIC_FILE_PATTERN = /\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml)$/;
+const PUBLIC_PATHS = [
+  "/login",
+  "/icon",
+  "/apple-icon",
+  "/favicon.ico",
+  "/apple-touch-icon.png",
+  "/site.webmanifest",
+  "/manifest.webmanifest",
+];
+const STATIC_FILE_PATTERN = /\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|webmanifest)$/;
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
