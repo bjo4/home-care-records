@@ -14,6 +14,7 @@ import {
   type TemperatureSite,
 } from "@/lib/care-records";
 import { changePassword, createApiToken, revokeApiToken } from "@/lib/auth";
+import { createLineBindCode } from "@/lib/line";
 import {
   addExam,
   addCareRecord,
@@ -218,6 +219,13 @@ export async function revokeApiTokenAction(formData: FormData) {
   await revokeApiToken(user.id, tokenId);
 
   revalidateCareViews();
+}
+
+export async function createLineBindCodeAction() {
+  const user = await requireCurrentUser();
+  const code = await createLineBindCode(user.id, user.displayName);
+  revalidateCareViews();
+  redirect(`/account?lineCode=${encodeURIComponent(code.code)}`);
 }
 
 export async function saveReminderAction(formData: FormData) {
