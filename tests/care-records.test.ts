@@ -57,6 +57,21 @@ test("blood pressure records mark common high and low ranges as abnormal", () =>
   assert.equal(isAbnormalBloodPressure(118, 76), false);
 });
 
+test("blood pressure pulse is optional", () => {
+  const record = createRecord("bloodPressure", {
+    datetime: "2026-09-20T08:20",
+    systolic: 118,
+    diastolic: 76,
+    posture: "坐",
+    recordedBy: "Warren",
+    notes: "未量脈搏",
+  });
+
+  assert.equal(record.type, "bloodPressure");
+  assert.equal(record.pulse, undefined);
+  assert.equal(record.abnormal, false);
+});
+
 test("medication presets include editable morning medicines and steroid note", () => {
   assert.deepEqual(
     MEDICATION_PRESETS.map((preset) => preset.name),

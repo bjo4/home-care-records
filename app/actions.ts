@@ -43,7 +43,7 @@ export async function addBloodPressureAction(formData: FormData) {
       datetime: requiredString(formData, "datetime"),
       systolic: requiredInteger(formData, "systolic"),
       diastolic: requiredInteger(formData, "diastolic"),
-      pulse: requiredInteger(formData, "pulse"),
+      pulse: optionalInteger(formData, "pulse"),
       posture: requiredString(formData, "posture") as BloodPressurePosture,
       recordedBy: user.displayName,
       notes: optionalString(formData, "notes"),
@@ -176,6 +176,22 @@ function requiredNumber(formData: FormData, key: string) {
 
 function requiredInteger(formData: FormData, key: string) {
   const value = requiredNumber(formData, key);
+
+  if (!Number.isInteger(value)) {
+    throw new Error(`${key} must be an integer`);
+  }
+
+  return value;
+}
+
+function optionalInteger(formData: FormData, key: string) {
+  const raw = formData.get(key)?.toString().trim();
+
+  if (!raw) {
+    return undefined;
+  }
+
+  const value = Number(raw);
 
   if (!Number.isInteger(value)) {
     throw new Error(`${key} must be an integer`);

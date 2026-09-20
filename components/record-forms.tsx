@@ -18,6 +18,7 @@ import {
   SYMPTOM_OPTIONS,
   TEMPERATURE_SITES,
 } from "@/lib/care-records";
+import { CircleCheckBig } from "lucide-react";
 
 type Props = {
   caregiver: string;
@@ -86,7 +87,10 @@ export function QuickCleanDayForm({ caregiver, nowInput }: Props) {
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
         <div>
           <p className="text-xs font-bold text-sky-700">晚間最快動作</p>
-          <h3 className="text-2xl font-black text-sky-950">今日無異狀</h3>
+          <h3 className="mt-1 flex items-center gap-2 text-2xl font-black text-sky-950">
+            <CircleCheckBig aria-hidden="true" className="size-7" />
+            今日無異狀
+          </h3>
           <p className="mt-1 text-sm text-sky-800">
             沒有嘔吐、頭痛、喘、咳血等警訊時，一鍵完成症狀紀錄。
           </p>
@@ -156,8 +160,8 @@ function BloodPressureForm({ caregiver, nowInput, open }: Props & { open?: boole
           <Field label="舒張壓" htmlFor="bp-diastolic">
             <Input id="bp-diastolic" name="diastolic" type="number" min="30" max="160" placeholder="80" required />
           </Field>
-          <Field label="脈搏" htmlFor="bp-pulse">
-            <Input id="bp-pulse" name="pulse" type="number" min="30" max="220" placeholder="78" required />
+          <Field label="脈搏（選填）" htmlFor="bp-pulse">
+            <Input id="bp-pulse" name="pulse" type="number" min="30" max="220" placeholder="78" />
           </Field>
         </div>
         <Field label="姿勢" htmlFor="bp-posture">

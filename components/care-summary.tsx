@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { AlertTriangle, CircleCheckBig } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   type BloodPressureRecord,
@@ -52,13 +53,22 @@ export function TodaySummary({ data, todayEntries }: Props) {
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-white/80">
+              {alertCount > 0 ? (
+                <AlertTriangle aria-hidden="true" className="size-6" />
+              ) : (
+                <CircleCheckBig aria-hidden="true" className="size-6" />
+              )}
+            </span>
+            <div>
             <p className="text-sm font-bold">
               {alertCount > 0 ? "今天有需要留意的紀錄" : "今天目前平穩"}
             </p>
             <h2 className="mt-1 text-2xl font-black">
               {alertCount > 0 ? `${alertCount} 筆警示` : "沒有異常標示"}
             </h2>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2 text-center text-sm">
             <span className="rounded-2xl bg-white/80 px-3 py-2 font-semibold">
@@ -85,7 +95,7 @@ export function TodaySummary({ data, todayEntries }: Props) {
         <MetricCard
           title="最新血壓"
           value={latestBp ? `${latestBp.systolic}/${latestBp.diastolic}` : "尚無"}
-          helper={latestBp ? `脈搏 ${latestBp.pulse}` : "先新增一筆"}
+          helper={latestBp ? bpHelper(latestBp) : "先新增一筆"}
           abnormal={latestBp?.abnormal}
         />
         <MetricCard
@@ -430,7 +440,7 @@ function recordHeadline(record: CareRecord) {
     case "temperature":
       return `${record.value.toFixed(1)}°C（${record.site}）`;
     case "bloodPressure":
-      return `${record.systolic}/${record.diastolic} mmHg，脈搏 ${record.pulse}（${record.posture}）`;
+      return `${record.systolic}/${record.diastolic} mmHg${record.pulse ? `，脈搏 ${record.pulse}` : ""}（${record.posture}）`;
     case "medication":
       return `${record.drugName}：${record.taken ? "已吃" : "未吃/吐掉"}`;
     case "symptoms":
@@ -446,6 +456,10 @@ function recordPerson(record: CareRecord) {
   return record.type === "medication"
     ? `確認：${record.confirmedBy}`
     : `記錄：${record.recordedBy}`;
+}
+
+function bpHelper(record: BloodPressureRecord) {
+  return record.pulse ? `脈搏 ${record.pulse}` : "未記脈搏";
 }
 
 function formatDateTime(value: string) {

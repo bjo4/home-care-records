@@ -73,7 +73,7 @@ export type BloodPressureRecord = BaseRecord & {
   type: "bloodPressure";
   systolic: number;
   diastolic: number;
-  pulse: number;
+  pulse?: number;
   posture: BloodPressurePosture;
   recordedBy: Caregiver;
 };
@@ -176,7 +176,11 @@ export function isAbnormalBloodPressure(systolic: number, diastolic: number) {
   );
 }
 
-export function isAbnormalPulse(pulse: number) {
+export function isAbnormalPulse(pulse?: number) {
+  if (pulse === undefined) {
+    return false;
+  }
+
   return (
     pulse < ABNORMAL_THRESHOLDS.pulse.low ||
     pulse > ABNORMAL_THRESHOLDS.pulse.high

@@ -1,13 +1,20 @@
 import { buttonVariants } from "@/components/ui/button";
+import {
+  ChartNoAxesCombined,
+  ClipboardPlus,
+  House,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 type NavKey = "today" | "add" | "history" | "account";
 
-const navItems: { key: NavKey; label: string; href: string }[] = [
-  { key: "today", label: "今日", href: "/" },
-  { key: "add", label: "記錄", href: "/add" },
-  { key: "history", label: "歷史", href: "/history" },
-  { key: "account", label: "帳號", href: "/account" },
+const navItems: { key: NavKey; label: string; href: string; icon: LucideIcon }[] = [
+  { key: "today", label: "今日", href: "/", icon: House },
+  { key: "add", label: "記錄", href: "/add", icon: ClipboardPlus },
+  { key: "history", label: "歷史", href: "/history", icon: ChartNoAxesCombined },
+  { key: "account", label: "帳號", href: "/account", icon: UserRound },
 ];
 
 export function AppFrame({
@@ -54,20 +61,25 @@ export function BottomNav({ active }: { active: NavKey }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/90 px-3 py-2 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur">
       <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
-        {navItems.map((item) => (
+        {navItems.map((item) => {
+          const Icon = item.icon;
+
+          return (
           <a
             key={item.href}
             href={item.href}
             aria-current={item.key === active ? "page" : undefined}
-            className={`flex min-h-12 items-center justify-center rounded-2xl text-sm font-bold ${
+            className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl text-xs font-bold ${
               item.key === active
                 ? "bg-emerald-700 text-white"
                 : "text-stone-700 hover:bg-emerald-50 hover:text-emerald-800"
             }`}
           >
+            <Icon aria-hidden="true" className="size-5" strokeWidth={2.4} />
             {item.label}
           </a>
-        ))}
+          );
+        })}
       </div>
     </nav>
   );

@@ -7,6 +7,22 @@ import {
 } from "@/components/record-forms";
 import { buttonVariants } from "@/components/ui/button";
 import { requireCurrentUser } from "@/lib/session";
+import {
+  AlertTriangle,
+  HeartPulse,
+  Pill,
+  Scale,
+  Thermometer,
+  type LucideIcon,
+} from "lucide-react";
+
+const ADD_ICONS: Record<RecordKind, LucideIcon> = {
+  temperature: Thermometer,
+  bloodPressure: HeartPulse,
+  medication: Pill,
+  symptoms: AlertTriangle,
+  weight: Scale,
+};
 
 type Props = {
   searchParams?: Promise<{
@@ -45,26 +61,42 @@ export default async function AddPage({ searchParams }: Props) {
           <QuickCleanDayForm caregiver={user.displayName} nowInput={nowInput} />
           <section className="grid gap-3">
             {ADD_RECORD_OPTIONS.map((option) => (
-              <a
-                key={option.kind}
-                href={`/add?type=${option.kind}`}
-                className="rounded-3xl border border-white/80 bg-white/95 p-4 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50"
-              >
-                <span className="block text-xl font-black text-stone-950">
-                  {option.title}
-                </span>
-                <span className="mt-1 block text-sm leading-6 text-muted-foreground">
-                  {option.description}
-                </span>
-                <span className={buttonVariants({ variant: "secondary", className: "mt-3 rounded-2xl" })}>
-                  開始填寫
-                </span>
-              </a>
+              <AddChoice key={option.kind} option={option} />
             ))}
           </section>
         </div>
       )}
     </AppFrame>
+  );
+}
+
+function AddChoice({
+  option,
+}: {
+  option: (typeof ADD_RECORD_OPTIONS)[number];
+}) {
+  const Icon = ADD_ICONS[option.kind];
+
+  return (
+    <a
+      href={`/add?type=${option.kind}`}
+      className="grid grid-cols-[3rem_1fr] gap-3 rounded-3xl border border-white/80 bg-white/95 p-4 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50"
+    >
+      <span className="flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+        <Icon aria-hidden="true" className="size-6" strokeWidth={2.4} />
+      </span>
+      <span>
+        <span className="block text-xl font-black text-stone-950">
+          {option.title}
+        </span>
+        <span className="mt-1 block text-sm leading-6 text-muted-foreground">
+          {option.description}
+        </span>
+        <span className={buttonVariants({ variant: "secondary", className: "mt-3 rounded-2xl" })}>
+          開始填寫
+        </span>
+      </span>
+    </a>
   );
 }
 
