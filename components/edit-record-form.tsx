@@ -7,6 +7,7 @@ import {
   BP_POSTURES,
   CLOTHING_OPTIONS,
   type CareRecord,
+  GLUCOSE_MEAL_TIMINGS,
   SEVERITY_OPTIONS,
   SYMPTOM_OPTIONS,
   TEMPERATURE_SITES,
@@ -88,6 +89,24 @@ function renderFields(record: CareRecord) {
               options={["yes", "no"]}
               labels={{ yes: "是，已吃", no: "否，未吃/吐掉" }}
               defaultValue={record.taken ? "yes" : "no"}
+            />
+          </Field>
+          <Notes value={record.notes} />
+        </>
+      );
+    case "bloodGlucose":
+      return (
+        <>
+          <DateTimeField value={record.datetime} />
+          <Field label="血糖（mg/dL）" htmlFor="value">
+            <Input id="value" name="value" type="number" min="20" max="600" defaultValue={record.value} required />
+          </Field>
+          <Field label="量測時機" htmlFor="mealTiming">
+            <NativeSelect
+              id="mealTiming"
+              name="mealTiming"
+              options={GLUCOSE_MEAL_TIMINGS}
+              defaultValue={record.mealTiming}
             />
           </Field>
           <Notes value={record.notes} />
