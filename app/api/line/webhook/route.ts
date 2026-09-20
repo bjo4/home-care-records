@@ -4,9 +4,9 @@ import { createRecord } from "@/lib/care-records";
 import { addCareRecord, getCareLog } from "@/lib/care-store";
 import {
   bindLineUser,
+  buildTodayRecordsFlexMessage,
   createCareRecordFromLineText,
   findLineBinding,
-  formatTodayRecordsSummary,
   getLineConversation,
   isLineMenuCommand,
   isTodayRecordsCommand,
@@ -133,7 +133,7 @@ async function replyTodayRecords(
   if (!binding) {
     return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
   }
-  return replyText(replyToken, formatTodayRecordsSummary(careData));
+  return reply(replyToken, [buildTodayRecordsFlexMessage(careData)]);
 }
 
 function menuMessage() {

@@ -152,7 +152,7 @@ Flex quick-log menu:
 
 - Follow/join or text `選單` / `記錄`
 - Buttons: `體溫`, `血壓`, `血糖`, `吃藥`, `今日無異狀`, `顯示紀錄`, `今日紀錄`
-- Text commands `紀錄` / `今日紀錄` / `顯示紀錄` reply with today's care-record summary
+- Text commands `紀錄` / `今日紀錄` / `顯示紀錄` reply with today's care-record Flex card (carousel when many items; empty state is also a Flex card)
 - Postback starts a one-step text input flow and writes into the same CareLog JSON store
 - Group/room pending input is keyed by the conversation id; logging prefers the group binding, then falls back to the sender's 1:1 binding
 
@@ -164,7 +164,7 @@ Reminder push cron:
   https://care.kuroshimae.cc/api/line/reminders/dispatch
 ```
 
-Recommended interval on `warren-tpe-01`: every 5-15 minutes. This route pushes due reminders to bound LINE user, group, and room ids via the same Messaging API `to` field. It does not modify ward bot / maria LINE bridge.
+Recommended interval on `warren-tpe-01`: every 5-15 minutes. This route pushes due reminders as a Flex list to bound LINE user, group, and room ids via the same Messaging API `to` field. If nothing is due, it skips the push. It does not modify ward bot / maria LINE bridge.
 
 ## MCP Server / MCP 伺服器
 

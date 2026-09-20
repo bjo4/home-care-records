@@ -5,6 +5,7 @@ import {
   getTodayEntries,
   type CareLogData,
   type CareRecord,
+  type CareReminder,
   type LineBinding,
   type LinePendingInput,
   type LineSourceType,
@@ -23,6 +24,31 @@ export type LineConversation = {
   sourceType: LineSourceType;
   senderUserId?: string;
 };
+
+export type LineFlexBubble = {
+  type: "bubble";
+  body: {
+    type: "box";
+    layout: "vertical";
+    spacing?: string;
+    contents: unknown[];
+  };
+};
+
+export type LineFlexCarousel = {
+  type: "carousel";
+  contents: LineFlexBubble[];
+};
+
+export type LineFlexMessage = {
+  type: "flex";
+  altText: string;
+  contents: LineFlexBubble | LineFlexCarousel;
+};
+
+const FLEX_ITEMS_PER_BUBBLE = 8;
+const FLEX_MAX_BUBBLES = 10;
+const FLEX_ALT_TEXT_MAX = 400;
 
 export function verifyLineSignature(body: string, signature: string | null, secret: string) {
   if (!signature || !secret) return false;
@@ -208,7 +234,7 @@ export async function createCareRecordFromLineText(
 export function formatTodayRecordsSummary(data: CareLogData, today = new Date()) {
   const entries = getTodayEntries(data, today);
   if (entries.length === 0) {
-    return "今天還沒有紀錄。可用選單快速記錄，或輸入「選單」。";
+    return "今日尚無紀錄";
   }
 
   const lines = entries.slice(0, 20).map((record) => {
@@ -218,6 +244,71 @@ export function formatTodayRecordsSummary(data: CareLogData, today = new Date())
   const extra =
     entries.length > 20 ? `\n…還有 ${entries.length - 20} 筆，請到 CareLog 查看完整列表。` : "";
   return `今日紀錄共 ${entries.length} 筆\n${lines.join("\n")}${extra}`;
+}
+
+export function buildTodayRecordsFlexMessage(data: CareLogData, today = new Date()): LineFlexMessage {
+  const entries = getTodayEntries(data, today);
+  if (entries.length === 0) {
+    return {
+      type: "flex",
+      altText: "今日尚無紀錄",
+      contents: flexBubble([
+        flexTitle("今日紀錄"),
+        flexMuted("今日尚無紀錄"),
+        flexMuted("可用選單快速記錄，或輸入「選單」。"),
+      ]),
+    };
+  }
+
+  const bubbles = chunkForFlex(entries).map((records, index, all) => {
+    const extra =
+      index === all.length - 1 && entries.length > recordsShownLimit()
+        ? entries.length - recordsShownLimit()
+        : 0;
+    const rows = records.flatMap((record, rowIndex) => [
+      ...(rowIndex === 0 ? [] : [flexSeparator()]),
+      recordFlexRow(record),
+    ]);
+    return flexBubble([
+      flexTitle(all.length > 1 ? `今日紀錄（${index + 1}/${all.length}）` : "今日紀錄"),
+      flexMuted(`共 ${entries.length} 筆`),
+      ...rows,
+      ...(extra > 0 ? [flexMuted(`…還有 ${extra} 筆，請到 CareLog 查看完整列表。`)] : []),
+    ]);
+  });
+
+  return {
+    type: "flex",
+    altText: truncateAlt(formatTodayRecordsSummary(data, today)),
+    contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
+  };
+}
+
+export function buildDueRemindersFlexMessage(reminders: CareReminder[]): LineFlexMessage | null {
+  if (reminders.length === 0) return null;
+
+  const bubbles = chunkForFlex(reminders).map((items, index, all) => {
+    const extra =
+      index === all.length - 1 && reminders.length > recordsShownLimit()
+        ? reminders.length - recordsShownLimit()
+        : 0;
+    const rows = items.flatMap((reminder, rowIndex) => [
+      ...(rowIndex === 0 ? [] : [flexSeparator()]),
+      reminderFlexRow(reminder),
+    ]);
+    return flexBubble([
+      flexTitle(all.length > 1 ? `待辦提醒（${index + 1}/${all.length}）` : "CareLog 提醒"),
+      flexMuted(`未來 48 小時有 ${reminders.length} 項待辦`),
+      ...rows,
+      ...(extra > 0 ? [flexMuted(`…還有 ${extra} 項，請到 CareLog 查看完整列表。`)] : []),
+    ]);
+  });
+
+  return {
+    type: "flex",
+    altText: truncateAlt(`CareLog 提醒：未來 48 小時有 ${reminders.length} 項待辦。`),
+    contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
+  };
 }
 
 function recordLabel(record: CareRecord) {
@@ -247,7 +338,7 @@ function recordHeadline(record: CareRecord) {
         ? "今日無異狀"
         : `${record.symptoms.join("、") || "未勾選"} ${record.severity}`;
     case "weight":
-      return `${record.value.toFixed(1)}kg`;
+      return `${record.value.toFixed(1)}kg（${record.clothing}）`;
   }
 }
 
@@ -255,8 +346,90 @@ function recordPerson(record: CareRecord) {
   return record.type === "medication" ? record.confirmedBy : record.recordedBy;
 }
 
+function recordFlexRow(record: CareRecord) {
+  const flag = record.abnormal ? "⚠ " : "";
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    contents: [
+      {
+        type: "box",
+        layout: "baseline",
+        spacing: "sm",
+        contents: [
+          { type: "text", text: formatRecordTime(record.datetime), size: "sm", color: "#0F766E", weight: "bold", flex: 2 },
+          { type: "text", text: `${flag}${recordLabel(record)}`, size: "sm", weight: "bold", flex: 2, wrap: true },
+          { type: "text", text: recordHeadline(record), size: "sm", wrap: true, flex: 5 },
+        ],
+      },
+      { type: "text", text: recordPerson(record), size: "xs", color: "#888888" },
+    ],
+  };
+}
+
+function reminderFlexRow(reminder: CareReminder) {
+  const contents: unknown[] = [
+    { type: "text", text: reminder.type, weight: "bold", size: "md", wrap: true },
+    { type: "text", text: formatReminderTime(reminder.dueAt), size: "sm", color: "#666666" },
+  ];
+  if (reminder.notes.trim()) {
+    contents.push({ type: "text", text: reminder.notes, size: "sm", wrap: true });
+  }
+  return { type: "box", layout: "vertical", spacing: "xs", contents };
+}
+
+function flexBubble(contents: unknown[]): LineFlexBubble {
+  return {
+    type: "bubble",
+    body: { type: "box", layout: "vertical", spacing: "md", contents },
+  };
+}
+
+function flexTitle(text: string) {
+  return { type: "text", text, weight: "bold", size: "lg", wrap: true };
+}
+
+function flexMuted(text: string) {
+  return { type: "text", text, size: "sm", color: "#666666", wrap: true };
+}
+
+function flexSeparator() {
+  return { type: "separator" };
+}
+
+function chunkForFlex<T>(items: T[]) {
+  return chunk(items.slice(0, recordsShownLimit()), FLEX_ITEMS_PER_BUBBLE);
+}
+
+function recordsShownLimit() {
+  return FLEX_ITEMS_PER_BUBBLE * FLEX_MAX_BUBBLES;
+}
+
+function chunk<T>(items: T[], size: number) {
+  const groups: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    groups.push(items.slice(index, index + size));
+  }
+  return groups;
+}
+
+function truncateAlt(text: string) {
+  return text.length <= FLEX_ALT_TEXT_MAX ? text : `${text.slice(0, FLEX_ALT_TEXT_MAX - 3)}...`;
+}
+
 function formatRecordTime(value: string) {
   return new Intl.DateTimeFormat("zh-TW", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function formatReminderTime(value: string) {
+  return new Intl.DateTimeFormat("zh-TW", {
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

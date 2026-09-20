@@ -10,6 +10,8 @@ import { createRecord } from "../lib/care-records";
 import { addCareRecord, emptyCareLogData, getCareLog, saveCareLog } from "../lib/care-store";
 import {
   bindLineUser,
+  buildDueRemindersFlexMessage,
+  buildTodayRecordsFlexMessage,
   createCareRecordFromLineText,
   createLineBindCode,
   findLineBinding,
@@ -264,12 +266,149 @@ test("today records commands and summary cover vitals, meds, and symptoms", asyn
     assert.match(summary, /血糖 104 飯前/);
     assert.match(summary, /吃藥 心律整錠 已吃/);
     assert.match(summary, /症狀 今日無異狀/);
+
+    await addCareRecord(
+      createRecord("weight", {
+        datetime: "2026-09-20T21:00",
+        value: 62.3,
+        clothing: "輕",
+        recordedBy: "姐姐",
+      }),
+      filePath,
+    );
+
+    const flex = buildTodayRecordsFlexMessage(
+      await getCareLog(filePath),
+      new Date("2026-09-20T12:00:00+08:00"),
+    );
+    assert.equal(flex.type, "flex");
+    assert.equal(flex.contents.type, "bubble");
+    const texts = collectFlexTexts(flex);
+    assert.match(flex.altText, /今日紀錄共 6 筆/);
+    assert.equal(texts.includes("今日紀錄"), true);
+    assert.equal(texts.some((text) => text.includes("體溫") && texts.some((item) => item.includes("36.8"))), true);
+    assert.equal(texts.some((text) => /36\.8°C/.test(text) || text.includes("36.8")), true);
+    assert.equal(texts.some((text) => text.includes("血壓") || text.includes("124/78")), true);
+    assert.equal(texts.some((text) => text.includes("124/78")), true);
+    assert.equal(texts.some((text) => text.includes("血糖") && texts.some((item) => item.includes("104"))), true);
+    assert.equal(texts.some((text) => text.includes("104") && text.includes("飯前")), true);
+    assert.equal(texts.some((text) => text.includes("心律整錠")), true);
+    assert.equal(texts.some((text) => text.includes("今日無異狀")), true);
+    assert.equal(texts.some((text) => text.includes("62.3") && text.includes("kg")), true);
+    assert.equal(texts.some((text) => /\d{2}:\d{2}/.test(text)), true);
   } finally {
     if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
     else process.env.CARELOG_DATA_FILE = previousDataFile;
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("today records flex empty state is a card, not plain text", async () => {
+  const flex = buildTodayRecordsFlexMessage(emptyCareLogData(), new Date("2026-09-20T12:00:00+08:00"));
+  assert.equal(flex.type, "flex");
+  assert.equal(flex.contents.type, "bubble");
+  assert.match(flex.altText, /今日尚無紀錄/);
+  assert.equal(collectFlexTexts(flex).includes("今日尚無紀錄"), true);
+});
+
+test("today records flex uses a carousel when there are many items", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-flex-many-"));
+  const filePath = path.join(dir, "carelog.json");
+
+  try {
+    for (let hour = 0; hour < 12; hour += 1) {
+      await addCareRecord(
+        createRecord("temperature", {
+          datetime: `2026-09-20T${String(hour).padStart(2, "0")}:00`,
+          value: 36.5 + hour / 10,
+          site: "耳",
+          recordedBy: "Warren",
+        }),
+        filePath,
+      );
+    }
+
+    const flex = buildTodayRecordsFlexMessage(
+      await getCareLog(filePath),
+      new Date("2026-09-20T12:00:00+08:00"),
+    );
+    assert.equal(flex.type, "flex");
+    assert.equal(flex.contents.type, "carousel");
+    assert.equal(Array.isArray(flex.contents.contents), true);
+    assert.equal((flex.contents.contents as unknown[]).length > 1, true);
+    assert.equal((flex.contents.contents as { type: string }[]).every((item) => item.type === "bubble"), true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("due reminder flex lists titles and times, and skips empty push", () => {
+  assert.equal(buildDueRemindersFlexMessage([]), null);
+
+  const flex = buildDueRemindersFlexMessage([
+    {
+      id: "r1",
+      type: "量血糖",
+      dueAt: "2026-09-20T18:00",
+      recurrence: "none",
+      notes: "晚餐前",
+      completed: false,
+      recordedBy: "Warren",
+      createdAt: "2026-09-20T08:00:00.000Z",
+    },
+    {
+      id: "r2",
+      type: "吃藥",
+      dueAt: "2026-09-21T07:10",
+      recurrence: "daily",
+      notes: "",
+      completed: false,
+      recordedBy: "姐姐",
+      createdAt: "2026-09-20T08:00:00.000Z",
+    },
+  ]);
+  assert.equal(flex?.type, "flex");
+  assert.equal(flex?.contents.type, "bubble");
+  assert.match(flex?.altText ?? "", /未來 48 小時有 2 項待辦/);
+  const texts = collectFlexTexts(flex);
+  assert.equal(texts.includes("量血糖"), true);
+  assert.equal(texts.includes("吃藥"), true);
+  assert.equal(texts.some((text) => text.includes("晚餐前")), true);
+  assert.equal(texts.some((text) => /\d{2}:\d{2}/.test(text)), true);
+});
+
+test("due reminder flex uses a carousel when there are many items", () => {
+  const reminders = Array.from({ length: 12 }, (_, index) => ({
+    id: `r${index}`,
+    type: "其他" as const,
+    dueAt: `2026-09-20T${String(index).padStart(2, "0")}:00`,
+    recurrence: "none" as const,
+    notes: `待辦 ${index + 1}`,
+    completed: false,
+    recordedBy: "Warren",
+    createdAt: "2026-09-20T08:00:00.000Z",
+  }));
+  const flex = buildDueRemindersFlexMessage(reminders);
+  assert.equal(flex?.type, "flex");
+  assert.equal(flex?.contents.type, "carousel");
+  assert.equal((flex?.contents.contents as unknown[]).length > 1, true);
+});
+
+function collectFlexTexts(node: unknown): string[] {
+  if (!node || typeof node !== "object") return [];
+  const value = node as Record<string, unknown>;
+  const texts = typeof value.text === "string" ? [value.text] : [];
+  if (typeof value.altText === "string") texts.push(value.altText);
+  for (const child of ["contents", "header", "hero", "body", "footer"] as const) {
+    const next = value[child];
+    if (Array.isArray(next)) {
+      for (const item of next) texts.push(...collectFlexTexts(item));
+    } else if (next) {
+      texts.push(...collectFlexTexts(next));
+    }
+  }
+  return texts;
+}
 
 test("legacy line bindings without sourceType normalize to user", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-legacy-"));
