@@ -2,6 +2,7 @@ import {
   changePasswordAction,
   createApiTokenAction,
   clearDataAction,
+  createLineBindCodeAction,
   logoutAction,
   revokeApiTokenAction,
   seedDemoDataAction,
@@ -9,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ApiToken, UserAccount } from "@/lib/care-records";
+import type { ApiToken, LineBinding, UserAccount } from "@/lib/care-records";
 import type { ReactNode } from "react";
 
 export function AccountPanel({
@@ -17,11 +18,15 @@ export function AccountPanel({
   status,
   newToken,
   tokens,
+  lineCode,
+  lineBindings,
 }: {
   user: UserAccount;
   status?: string;
   newToken?: string;
   tokens: ApiToken[];
+  lineCode?: string;
+  lineBindings: LineBinding[];
 }) {
   return (
     <div className="grid gap-4">
@@ -36,6 +41,40 @@ export function AccountPanel({
             登出
           </Button>
         </form>
+      </section>
+
+      <section className="rounded-3xl border border-white/70 bg-white/90 p-4 shadow-sm">
+        <h2 className="text-xl font-black">LINE 綁定</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          用 care-station 官方帳號傳送綁定碼，之後可接收提醒與快速記錄。
+        </p>
+        {lineCode ? (
+          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm">
+            <p className="font-bold text-amber-900">請在 LINE 傳送此綁定碼（15 分鐘內有效）</p>
+            <code className="mt-2 block rounded-xl bg-white p-3 text-center font-mono text-xl font-black">
+              {lineCode}
+            </code>
+          </div>
+        ) : null}
+        <form action={createLineBindCodeAction} className="mt-4">
+          <Button type="submit" className="min-h-12 w-full rounded-2xl">
+            產生 LINE 綁定碼
+          </Button>
+        </form>
+        <div className="mt-4 grid gap-2">
+          {lineBindings.length === 0 ? (
+            <p className="text-sm text-muted-foreground">尚未綁定 LINE。</p>
+          ) : (
+            lineBindings.map((binding) => (
+              <div key={binding.id} className="rounded-2xl border bg-white p-3 text-sm">
+                <p className="font-bold">{binding.displayName}</p>
+                <p className="text-xs text-muted-foreground">
+                  LINE userId：{binding.lineUserId.slice(0, 8)}... · {formatDate(binding.createdAt)}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
       </section>
 
       <section className="rounded-3xl border border-white/70 bg-white/90 p-4 shadow-sm">
