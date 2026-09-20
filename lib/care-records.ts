@@ -239,6 +239,29 @@ export type ApiToken = {
   revokedAt?: string;
 };
 
+export type LineBinding = {
+  id: string;
+  userId: string;
+  lineUserId: string;
+  displayName: string;
+  createdAt: string;
+};
+
+export type LineBindCode = {
+  code: string;
+  userId: string;
+  displayName: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string;
+};
+
+export type LinePendingInput = {
+  lineUserId: string;
+  kind: "temperature" | "bloodPressure" | "bloodGlucose" | "medication";
+  createdAt: string;
+};
+
 export type CareLogData = {
   records: CareRecord[];
   reminders: CareReminder[];
@@ -246,6 +269,9 @@ export type CareLogData = {
   exams: ExamRecord[];
   visits: VisitRecord[];
   apiTokens: ApiToken[];
+  lineBindings: LineBinding[];
+  lineBindCodes: LineBindCode[];
+  linePendingInputs: LinePendingInput[];
   users: UserAccount[];
   sessions: AuthSession[];
   loginAttempts: LoginAttempt[];
@@ -506,6 +532,9 @@ export function buildDemoData(): CareLogData {
     exams: [],
     visits: [],
     apiTokens: [],
+    lineBindings: [],
+    lineBindCodes: [],
+    linePendingInputs: [],
     users: [],
     sessions: [],
     loginAttempts: [],
