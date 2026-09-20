@@ -3,6 +3,7 @@ export const CAREGIVERS = ["Warren", "姐姐", "爸爸", "María"] as const;
 export const TEMPERATURE_SITES = ["額", "耳", "腋"] as const;
 export const BP_POSTURES = ["坐", "躺"] as const;
 export const CLOTHING_OPTIONS = ["輕", "重"] as const;
+export const GLUCOSE_MEAL_TIMINGS = ["飯前", "飯後", "空腹", "其他/未指定"] as const;
 export const SYMPTOM_OPTIONS = [
   "嘔吐",
   "頭痛",
@@ -35,6 +36,10 @@ export const ABNORMAL_THRESHOLDS = {
     low: 50,
     high: 110,
   },
+  bloodGlucose: {
+    low: 70,
+    high: 180,
+  },
   weight: {
     dailyChangeKg: 1,
   },
@@ -44,11 +49,13 @@ export type Caregiver = (typeof CAREGIVERS)[number] | string;
 export type TemperatureSite = (typeof TEMPERATURE_SITES)[number];
 export type BloodPressurePosture = (typeof BP_POSTURES)[number];
 export type Clothing = (typeof CLOTHING_OPTIONS)[number];
+export type GlucoseMealTiming = (typeof GLUCOSE_MEAL_TIMINGS)[number];
 export type Symptom = (typeof SYMPTOM_OPTIONS)[number];
 export type Severity = (typeof SEVERITY_OPTIONS)[number];
 export type RecordType =
   | "temperature"
   | "bloodPressure"
+  | "bloodGlucose"
   | "medication"
   | "symptoms"
   | "weight";
@@ -80,6 +87,13 @@ export type BloodPressureRecord = BaseRecord & {
   recordedBy: Caregiver;
 };
 
+export type BloodGlucoseRecord = BaseRecord & {
+  type: "bloodGlucose";
+  value: number;
+  mealTiming: GlucoseMealTiming;
+  recordedBy: Caregiver;
+};
+
 export type MedicationRecord = BaseRecord & {
   type: "medication";
   drugName: string;
@@ -107,6 +121,7 @@ export type WeightRecord = BaseRecord & {
 export type CareRecord =
   | TemperatureRecord
   | BloodPressureRecord
+  | BloodGlucoseRecord
   | MedicationRecord
   | SymptomsRecord
   | WeightRecord;
@@ -149,6 +164,10 @@ type RecordInputMap = {
     datetime: string;
     notes?: string;
   };
+  bloodGlucose: Omit<BloodGlucoseRecord, keyof BaseRecord | "abnormal"> & {
+    datetime: string;
+    notes?: string;
+  };
   medication: Omit<MedicationRecord, keyof BaseRecord | "abnormal"> & {
     datetime: string;
     notes?: string;
@@ -186,6 +205,13 @@ export function isAbnormalPulse(pulse?: number) {
   return (
     pulse < ABNORMAL_THRESHOLDS.pulse.low ||
     pulse > ABNORMAL_THRESHOLDS.pulse.high
+  );
+}
+
+export function isAbnormalBloodGlucose(value: number) {
+  return (
+    value < ABNORMAL_THRESHOLDS.bloodGlucose.low ||
+    value >= ABNORMAL_THRESHOLDS.bloodGlucose.high
   );
 }
 
@@ -234,6 +260,17 @@ export function createRecord<T extends RecordType>(
         abnormal:
           isAbnormalBloodPressure(payload.systolic, payload.diastolic) ||
           isAbnormalPulse(payload.pulse),
+      } as Extract<CareRecord, { type: T }>;
+    }
+    case "bloodGlucose": {
+      const payload = input as RecordInputMap["bloodGlucose"];
+      return {
+        ...base,
+        type,
+        value: payload.value,
+        mealTiming: payload.mealTiming,
+        recordedBy: payload.recordedBy,
+        abnormal: isAbnormalBloodGlucose(payload.value),
       } as Extract<CareRecord, { type: T }>;
     }
     case "medication": {
@@ -325,6 +362,13 @@ export function buildDemoData(): CareLogData {
         posture: "坐",
         recordedBy: "爸爸",
         notes: "起床後 10 分鐘",
+      }),
+      createRecord("bloodGlucose", {
+        datetime: `${today}T07:45`,
+        value: 104,
+        mealTiming: "飯前",
+        recordedBy: "Warren",
+        notes: "早餐前",
       }),
       createRecord("weight", {
         datetime: `${today}T07:40`,
