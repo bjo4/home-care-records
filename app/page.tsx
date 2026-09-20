@@ -25,8 +25,8 @@ export default async function Home() {
         </>
       }
     >
-      <TodaySummary data={data} todayEntries={todayEntries} />
       <HomeCareStrip reminders={dueReminders} activeMeds={activeMeds} />
+      <TodaySummary data={data} todayEntries={todayEntries} />
       <VitalCharts data={data} />
       <QuickCleanDayForm caregiver={user.displayName} nowInput={nowInput} />
     </AppFrame>

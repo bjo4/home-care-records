@@ -59,6 +59,38 @@ export function AccountPanel({
             建立 token
           </Button>
         </form>
+        <div className="mt-4 rounded-2xl border bg-stone-50 p-3 text-sm">
+          <h3 className="font-black">MCP 連線方式</h3>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
+            <li>建立 token 並複製 `clr_...`。</li>
+            <li>貼到 Cursor / Claude Desktop MCP 設定。</li>
+            <li>測試 `tools/list`，確認能看到 CareLog tools。</li>
+          </ol>
+          <p className="mt-3 font-semibold">MCP URL</p>
+          <code className="mt-1 block break-all rounded-xl bg-white p-2 font-mono text-xs">
+            https://care.kuroshimae.cc/api/mcp
+          </code>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Alias：<code>https://care.kuroshimae.cc/mcp</code>
+          </p>
+          <p className="mt-3 font-semibold">Auth header</p>
+          <code className="mt-1 block break-all rounded-xl bg-white p-2 font-mono text-xs">
+            Authorization: Bearer &lt;token&gt;
+          </code>
+          <p className="mt-3 font-semibold">Cursor / Claude Desktop 設定範例</p>
+          <pre className="mt-1 overflow-x-auto rounded-xl bg-white p-3 text-xs">
+{`{
+  "mcpServers": {
+    "carelog": {
+      "url": "https://care.kuroshimae.cc/api/mcp",
+      "headers": {
+        "Authorization": "Bearer clr_your_token_here"
+      }
+    }
+  }
+}`}
+          </pre>
+        </div>
         <div className="mt-4 grid gap-2">
           {tokens.length === 0 ? (
             <p className="text-sm text-muted-foreground">尚無 token。</p>

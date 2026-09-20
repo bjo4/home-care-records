@@ -116,12 +116,19 @@ export function TodaySummary({ data, todayEntries }: Props) {
         />
       </div>
 
-      <Card className="bg-white/95 shadow-sm">
-        <CardHeader>
-          <CardTitle>今日紀錄</CardTitle>
-          <CardDescription>依時間由新到舊排列，方便交班快速查看。</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <details className="rounded-3xl border border-white/80 bg-white/95 shadow-sm">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 py-3">
+          <span>
+            <span className="block text-lg font-black">今日紀錄</span>
+            <span className="text-sm text-muted-foreground">
+              {todayEntries.length} 筆，展開查看明細
+            </span>
+          </span>
+          <span className="rounded-full bg-muted px-3 py-2 text-sm font-bold text-muted-foreground">
+            展開
+          </span>
+        </summary>
+        <div className="border-t px-4 py-4">
           {todayEntries.length === 0 ? (
             <EmptyState
               title="今天還沒有紀錄"
@@ -130,8 +137,8 @@ export function TodaySummary({ data, todayEntries }: Props) {
           ) : (
             <RecordList records={todayEntries} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </details>
     </section>
   );
 }
