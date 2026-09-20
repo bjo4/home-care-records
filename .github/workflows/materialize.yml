@@ -16,15 +16,15 @@ jobs:
       - name: Restore tracked source archive
         run: |
           set -euo pipefail
-          part_a=".github/home-care-records.tar.gz.b64.part-aa"
-          part_b=".github/home-care-records.tar.gz.b64.part-ab"
-          if [ ! -f "$part_a" ] || [ ! -f "$part_b" ]; then
-            echo "Archive parts are not both present yet; skipping."
+          shopt -s nullglob
+          parts=(.github/home-care-records.tar.xz.b64.part-*)
+          if [ "${#parts[@]}" -lt 3 ]; then
+            echo "Archive parts are not all present yet; skipping."
             exit 0
           fi
-          cat "$part_a" "$part_b" | base64 -d > /tmp/home-care-records.tar.gz
-          tar -xzf /tmp/home-care-records.tar.gz -C "$GITHUB_WORKSPACE"
-          rm -f "$part_a" "$part_b" .github/workflows/materialize.yml
+          cat "${parts[@]}" | base64 -d > /tmp/home-care-records.tar.xz
+          tar -xJf /tmp/home-care-records.tar.xz -C "$GITHUB_WORKSPACE"
+          rm -f "${parts[@]}" .github/workflows/materialize.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
