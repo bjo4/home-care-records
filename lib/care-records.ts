@@ -239,10 +239,13 @@ export type ApiToken = {
   revokedAt?: string;
 };
 
+export type LineSourceType = "user" | "group" | "room";
+
 export type LineBinding = {
   id: string;
   userId: string;
   lineUserId: string;
+  sourceType: LineSourceType;
   displayName: string;
   createdAt: string;
 };

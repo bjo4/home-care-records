@@ -368,7 +368,9 @@ export function normalizeCareLogData(data: Partial<CareLogData>): CareLogData {
     exams: Array.isArray(data.exams) ? data.exams : [],
     visits: Array.isArray(data.visits) ? data.visits : [],
     apiTokens: Array.isArray(data.apiTokens) ? data.apiTokens : [],
-    lineBindings: Array.isArray(data.lineBindings) ? data.lineBindings : [],
+    lineBindings: Array.isArray(data.lineBindings)
+      ? data.lineBindings.map(normalizeLineBinding)
+      : [],
     lineBindCodes: Array.isArray(data.lineBindCodes) ? data.lineBindCodes : [],
     linePendingInputs: Array.isArray(data.linePendingInputs)
       ? data.linePendingInputs
@@ -376,6 +378,18 @@ export function normalizeCareLogData(data: Partial<CareLogData>): CareLogData {
     users: Array.isArray(data.users) ? data.users.map(migrateUser) : [],
     sessions: Array.isArray(data.sessions) ? data.sessions : [],
     loginAttempts: Array.isArray(data.loginAttempts) ? data.loginAttempts : [],
+  };
+}
+
+function normalizeLineBinding(
+  binding: CareLogData["lineBindings"][number],
+): CareLogData["lineBindings"][number] {
+  return {
+    ...binding,
+    sourceType:
+      binding.sourceType === "group" || binding.sourceType === "room"
+        ? binding.sourceType
+        : "user",
   };
 }
 

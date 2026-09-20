@@ -146,12 +146,15 @@ Binding flow:
 3. Click `產生 LINE 綁定碼`.
 4. Send the code, e.g. `CL-A1B2C3`, to the care-station LINE OA within 15 minutes.
 5. LINE replies with the bound CareLog display name.
+6. To bind a household group: invite the OA into the LINE group, then post the same bind code in that group. CareLog stores the `groupId` / `roomId` so everyone in the group can quick-log and receive reminders.
 
 Flex quick-log menu:
 
 - Follow/join or text `選單` / `記錄`
-- Buttons: `體溫`, `血壓`, `血糖`, `吃藥`, `今日無異狀`
-- Postback starts a one-step text input flow and writes into the same CareLog JSON store.
+- Buttons: `體溫`, `血壓`, `血糖`, `吃藥`, `今日無異狀`, `顯示紀錄`, `今日紀錄`
+- Text commands `紀錄` / `今日紀錄` / `顯示紀錄` reply with today's care-record summary
+- Postback starts a one-step text input flow and writes into the same CareLog JSON store
+- Group/room pending input is keyed by the conversation id; logging prefers the group binding, then falls back to the sender's 1:1 binding
 
 Reminder push cron:
 
@@ -161,7 +164,7 @@ Reminder push cron:
   https://care.kuroshimae.cc/api/line/reminders/dispatch
 ```
 
-Recommended interval on `warren-tpe-01`: every 5-15 minutes. This route pushes due reminders to bound LINE userIds. It does not modify ward bot / maria LINE bridge.
+Recommended interval on `warren-tpe-01`: every 5-15 minutes. This route pushes due reminders to bound LINE user, group, and room ids via the same Messaging API `to` field. It does not modify ward bot / maria LINE bridge.
 
 ## MCP Server / MCP 伺服器
 
@@ -227,6 +230,7 @@ npm run build
 ## Docs checked
 
 - Docs: Next.js 16.3.5 - App Router installation / scripts (https://nextjs.org/docs/app/getting-started/installation, checked 2026-09-20)
+- Docs: Next.js 16.3.5 - App Router route.js / Route Handlers (node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md, checked 2026-09-20)
 - Docs: Tailwind CSS 4 - Next.js framework guide (https://tailwindcss.com/docs/installation/framework-guides/nextjs, checked 2026-09-20)
 - Docs: shadcn/ui 4.21.0 - Next.js installation / add components (https://ui.shadcn.com/docs/installation/next, checked 2026-09-20)
 - Docs: tsx 4.23.13 - Node.js loader (https://github.com/privatenumber/tsx#nodejs-loader, checked 2026-09-20)
