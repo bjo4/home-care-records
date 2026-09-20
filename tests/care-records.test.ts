@@ -29,6 +29,7 @@ test("temperature records always keep caregiver, notes, site, and abnormal flag"
   assert.equal(record.abnormal, true);
   assert.equal(isAbnormalTemperature(37.4), false);
   assert.equal(isAbnormalTemperature(ABNORMAL_THRESHOLDS.temperature.feverC), true);
+  assert.equal(isAbnormalTemperature(35.9), true);
 });
 
 test("blood pressure records mark common high and low ranges as abnormal", () => {
@@ -55,6 +56,33 @@ test("blood pressure records mark common high and low ranges as abnormal", () =>
   assert.equal(high.abnormal, true);
   assert.equal(low.abnormal, true);
   assert.equal(isAbnormalBloodPressure(118, 76), false);
+  assert.equal(isAbnormalBloodPressure(130, 79), true);
+  assert.equal(isAbnormalBloodPressure(119, 80), true);
+});
+
+test("pulse attention range is 60 to 100 bpm when present", () => {
+  const highPulse = createRecord("bloodPressure", {
+    datetime: "2026-09-20T08:25",
+    systolic: 118,
+    diastolic: 76,
+    pulse: 101,
+    posture: "坐",
+    recordedBy: "Warren",
+    notes: "",
+  });
+
+  const normalPulse = createRecord("bloodPressure", {
+    datetime: "2026-09-20T08:30",
+    systolic: 118,
+    diastolic: 76,
+    pulse: 72,
+    posture: "坐",
+    recordedBy: "Warren",
+    notes: "",
+  });
+
+  assert.equal(highPulse.abnormal, true);
+  assert.equal(normalPulse.abnormal, false);
 });
 
 test("blood pressure pulse is optional", () => {
@@ -88,11 +116,19 @@ test("blood glucose records keep meal timing and flag attention ranges", () => {
     recordedBy: "姐姐",
     notes: "",
   });
+  const fastingElevated = createRecord("bloodGlucose", {
+    datetime: "2026-09-20T07:00",
+    value: 100,
+    mealTiming: "空腹",
+    recordedBy: "Warren",
+    notes: "",
+  });
 
   assert.equal(high.type, "bloodGlucose");
   assert.equal(high.abnormal, true);
   assert.equal(normal.abnormal, false);
   assert.equal(normal.mealTiming, "飯前");
+  assert.equal(fastingElevated.abnormal, true);
 });
 
 test("medication presets include editable morning medicines and steroid note", () => {

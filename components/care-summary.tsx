@@ -198,7 +198,7 @@ export function VitalCharts({
           <h2 className="text-2xl font-bold tracking-tight">生命徵象走勢</h2>
         </div>
       ) : null}
-      <TrendCard title="體溫趨勢" description="虛線：發燒警示 37.5°C">
+      <TrendCard title="體溫趨勢" description="居家參考線：低標 36.0 / 發燒 37.5">
         <LineChart
           series={[
             {
@@ -213,6 +213,11 @@ export function VitalCharts({
           suffix="°C"
           referenceLines={[
             {
+              value: ABNORMAL_THRESHOLDS.temperature.lowC,
+              label: "低標",
+              color: "#0f766e",
+            },
+            {
               value: ABNORMAL_THRESHOLDS.temperature.feverC,
               label: "發燒線",
               color: "#dc2626",
@@ -220,7 +225,7 @@ export function VitalCharts({
           ]}
         />
       </TrendCard>
-      <TrendCard title="血壓趨勢" description="虛線：高標/低標">
+      <TrendCard title="血壓趨勢" description="居家參考線：理想上限 / 高標 / 低標">
         <LineChart
           series={[
             {
@@ -244,23 +249,38 @@ export function VitalCharts({
           referenceLines={[
             {
               value: ABNORMAL_THRESHOLDS.bloodPressure.highSystolic,
-              label: "高收",
+              label: "高標收",
               color: "#dc2626",
             },
             {
               value: ABNORMAL_THRESHOLDS.bloodPressure.highDiastolic,
-              label: "高舒/低收",
+              label: "高標舒",
               color: "#f97316",
             },
             {
+              value: ABNORMAL_THRESHOLDS.bloodPressure.idealSystolic,
+              label: "理想收",
+              color: "#f97316",
+            },
+            {
+              value: ABNORMAL_THRESHOLDS.bloodPressure.idealDiastolic,
+              label: "理想舒",
+              color: "#0ea5e9",
+            },
+            {
+              value: ABNORMAL_THRESHOLDS.bloodPressure.lowSystolic,
+              label: "低標收",
+              color: "#0f766e",
+            },
+            {
               value: ABNORMAL_THRESHOLDS.bloodPressure.lowDiastolic,
-              label: "低舒",
+              label: "低標舒",
               color: "#0f766e",
             },
           ]}
         />
       </TrendCard>
-      <TrendCard title="血糖趨勢" description="參考線：低 70 / 高 180 mg/dL">
+      <TrendCard title="血糖趨勢" description="居家參考線：低 70 / 空腹 100 / 飯後 140 / 高 180">
         <LineChart
           series={[
             {
@@ -276,12 +296,22 @@ export function VitalCharts({
           referenceLines={[
             {
               value: ABNORMAL_THRESHOLDS.bloodGlucose.high,
-              label: "高參考",
+              label: "高關注",
               color: "#dc2626",
             },
             {
+              value: ABNORMAL_THRESHOLDS.bloodGlucose.postMealReference,
+              label: "飯後參考",
+              color: "#f97316",
+            },
+            {
+              value: ABNORMAL_THRESHOLDS.bloodGlucose.fastingElevated,
+              label: "空腹高界",
+              color: "#eab308",
+            },
+            {
               value: ABNORMAL_THRESHOLDS.bloodGlucose.low,
-              label: "低參考",
+              label: "低標",
               color: "#0f766e",
             },
           ]}

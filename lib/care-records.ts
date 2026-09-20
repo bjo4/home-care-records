@@ -24,20 +24,27 @@ export const MEDICATION_PRESETS = [
 
 export const ABNORMAL_THRESHOLDS = {
   temperature: {
+    lowC: 36.0,
+    normalLowC: 36.5,
+    normalHighC: 37.3,
     feverC: 37.5,
   },
   bloodPressure: {
-    highSystolic: 140,
-    highDiastolic: 90,
+    idealSystolic: 120,
+    idealDiastolic: 80,
+    highSystolic: 130,
+    highDiastolic: 80,
     lowSystolic: 90,
     lowDiastolic: 60,
   },
   pulse: {
-    low: 50,
-    high: 110,
+    low: 60,
+    high: 100,
   },
   bloodGlucose: {
     low: 70,
+    fastingElevated: 100,
+    postMealReference: 140,
     high: 180,
   },
   weight: {
@@ -183,7 +190,10 @@ type RecordInputMap = {
 };
 
 export function isAbnormalTemperature(value: number) {
-  return value >= ABNORMAL_THRESHOLDS.temperature.feverC;
+  return (
+    value < ABNORMAL_THRESHOLDS.temperature.lowC ||
+    value >= ABNORMAL_THRESHOLDS.temperature.feverC
+  );
 }
 
 export function isAbnormalBloodPressure(systolic: number, diastolic: number) {
@@ -208,11 +218,25 @@ export function isAbnormalPulse(pulse?: number) {
   );
 }
 
-export function isAbnormalBloodGlucose(value: number) {
-  return (
-    value < ABNORMAL_THRESHOLDS.bloodGlucose.low ||
-    value >= ABNORMAL_THRESHOLDS.bloodGlucose.high
-  );
+export function isAbnormalBloodGlucose(
+  value: number,
+  mealTiming: GlucoseMealTiming,
+) {
+  const threshold = ABNORMAL_THRESHOLDS.bloodGlucose;
+
+  if (value < threshold.low) {
+    return true;
+  }
+
+  if (mealTiming === "飯前" || mealTiming === "空腹") {
+    return value >= threshold.fastingElevated;
+  }
+
+  if (mealTiming === "飯後") {
+    return value >= threshold.high;
+  }
+
+  return value >= threshold.high;
 }
 
 export function isAbnormalWeightChange(value: number, previousValue?: number) {
@@ -270,7 +294,7 @@ export function createRecord<T extends RecordType>(
         value: payload.value,
         mealTiming: payload.mealTiming,
         recordedBy: payload.recordedBy,
-        abnormal: isAbnormalBloodGlucose(payload.value),
+        abnormal: isAbnormalBloodGlucose(payload.value, payload.mealTiming),
       } as Extract<CareRecord, { type: T }>;
     }
     case "medication": {
