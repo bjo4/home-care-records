@@ -79,6 +79,9 @@ PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,vickie:chang
 | `CARELOG_COOKIE_SECURE` | `false` | 設為 `true` 時 session cookie 加上 `Secure`；若本機用 `http://127.0.0.1:8800` 測試請維持 `false` |
 | `CARELOG_REMINDER_TOKEN` | 無 | 選填；外部 bot 可用 `Authorization: Bearer <token>` 呼叫 `/api/reminders/due` |
 | `CARELOG_TOKEN_PEPPER` | `carelog-local-token-pepper` | API token hash pepper；production 建議設定固定隨機值 |
+| `LINE_CHANNEL_SECRET` / `CARELOG_LINE_CHANNEL_SECRET` | 無 | care-station LINE Official Account webhook signature secret |
+| `LINE_CHANNEL_ACCESS_TOKEN` / `CARELOG_LINE_CHANNEL_ACCESS_TOKEN` | 無 | care-station LINE Official Account reply/push token |
+| `CARELOG_CRON_TOKEN` | 無 | 呼叫 `/api/line/reminders/dispatch` 的 cron bearer token；未設定時可用 `CARELOG_REMINDER_TOKEN` |
 
 範例：
 
@@ -118,6 +121,47 @@ Response:
 ```
 
 Browser requests can also use the normal `carelog_session` cookie. Without a valid session or bearer token, the API returns `401`.
+
+## LINE Messaging API / LINE 官方帳號
+
+CareLog exposes a webhook for the care-station Official Account:
+
+```text
+POST https://care.kuroshimae.cc/api/line/webhook
+```
+
+LINE Developers console:
+
+1. Open the care-station Official Account channel.
+2. Set Webhook URL to `https://care.kuroshimae.cc/api/line/webhook`.
+3. Enable webhook.
+4. Set env vars on the CareLog host:
+   - `LINE_CHANNEL_SECRET`
+   - `LINE_CHANNEL_ACCESS_TOKEN`
+
+Binding flow:
+
+1. Caregiver logs in to CareLog.
+2. Open `/account`.
+3. Click `產生 LINE 綁定碼`.
+4. Send the code, e.g. `CL-A1B2C3`, to the care-station LINE OA within 15 minutes.
+5. LINE replies with the bound CareLog display name.
+
+Flex quick-log menu:
+
+- Follow/join or text `選單` / `記錄`
+- Buttons: `體溫`, `血壓`, `血糖`, `吃藥`, `今日無異狀`
+- Postback starts a one-step text input flow and writes into the same CareLog JSON store.
+
+Reminder push cron:
+
+```bash
+*/10 * * * * curl -X POST \
+  -H "Authorization: Bearer $CARELOG_CRON_TOKEN" \
+  https://care.kuroshimae.cc/api/line/reminders/dispatch
+```
+
+Recommended interval on `warren-tpe-01`: every 5-15 minutes. This route pushes due reminders to bound LINE userIds. It does not modify ward bot / maria LINE bridge.
 
 ## MCP Server / MCP 伺服器
 
