@@ -12,6 +12,7 @@ import { AlertTriangle, CircleCheckBig } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   ABNORMAL_THRESHOLDS,
+  type BloodGlucoseRecord,
   type BloodPressureRecord,
   type CareLogData,
   type CareRecord,
@@ -29,6 +30,7 @@ type Props = {
 export function TodaySummary({ data, todayEntries }: Props) {
   const latestTemperature = latestOfType<TemperatureRecord>(data, "temperature");
   const latestBp = latestOfType<BloodPressureRecord>(data, "bloodPressure");
+  const latestGlucose = latestOfType<BloodGlucoseRecord>(data, "bloodGlucose");
   const latestWeight = latestOfType<WeightRecord>(data, "weight");
   const alertCount = todayEntries.filter((record) => record.abnormal).length;
   const todayMeds = todayEntries.filter(
@@ -82,7 +84,7 @@ export function TodaySummary({ data, todayEntries }: Props) {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <MetricCard
           title="今日筆數"
           value={`${todayEntries.length}`}
@@ -99,6 +101,12 @@ export function TodaySummary({ data, todayEntries }: Props) {
           value={latestBp ? `${latestBp.systolic}/${latestBp.diastolic}` : "尚無"}
           helper={latestBp ? bpHelper(latestBp) : "先新增一筆"}
           abnormal={latestBp?.abnormal}
+        />
+        <MetricCard
+          title="最新血糖"
+          value={latestGlucose ? `${latestGlucose.value}` : "尚無"}
+          helper={latestGlucose ? `${latestGlucose.mealTiming} mg/dL` : "先新增一筆"}
+          abnormal={latestGlucose?.abnormal}
         />
         <MetricCard
           title="最新體重"
@@ -179,6 +187,7 @@ export function VitalCharts({
 }) {
   const temperatures = recordsOfType<TemperatureRecord>(data, "temperature");
   const bloodPressures = recordsOfType<BloodPressureRecord>(data, "bloodPressure");
+  const bloodGlucose = recordsOfType<BloodGlucoseRecord>(data, "bloodGlucose");
   const weights = recordsOfType<WeightRecord>(data, "weight");
 
   return (
@@ -246,6 +255,33 @@ export function VitalCharts({
             {
               value: ABNORMAL_THRESHOLDS.bloodPressure.lowDiastolic,
               label: "低舒",
+              color: "#0f766e",
+            },
+          ]}
+        />
+      </TrendCard>
+      <TrendCard title="血糖趨勢" description="參考線：低 70 / 高 180 mg/dL">
+        <LineChart
+          series={[
+            {
+              label: "血糖",
+              color: "#0891b2",
+              points: bloodGlucose.map((record) => ({
+                label: formatShortDateTime(record.datetime),
+                value: record.value,
+              })),
+            },
+          ]}
+          suffix=" mg/dL"
+          referenceLines={[
+            {
+              value: ABNORMAL_THRESHOLDS.bloodGlucose.high,
+              label: "高參考",
+              color: "#dc2626",
+            },
+            {
+              value: ABNORMAL_THRESHOLDS.bloodGlucose.low,
+              label: "低參考",
               color: "#0f766e",
             },
           ]}
@@ -513,6 +549,7 @@ function recordLabel(record: CareRecord) {
   const labels: Record<CareRecord["type"], string> = {
     temperature: "體溫",
     bloodPressure: "血壓",
+    bloodGlucose: "血糖",
     medication: "吃藥",
     symptoms: "症狀",
     weight: "體重",
@@ -527,6 +564,8 @@ function recordHeadline(record: CareRecord) {
       return `${record.value.toFixed(1)}°C（${record.site}）`;
     case "bloodPressure":
       return `${record.systolic}/${record.diastolic} mmHg${record.pulse ? `，脈搏 ${record.pulse}` : ""}（${record.posture}）`;
+    case "bloodGlucose":
+      return `${record.value} mg/dL（${record.mealTiming}）`;
     case "medication":
       return `${record.drugName}：${record.taken ? "已吃" : "未吃/吐掉"}`;
     case "symptoms":
