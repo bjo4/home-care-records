@@ -9,7 +9,7 @@ export default async function HistoryPage() {
 
   return (
     <AppFrame
-      active="history"
+      active="care"
       title="歷史紀錄"
       description="先看最近紀錄；需要比較趨勢時再展開圖表。"
     >

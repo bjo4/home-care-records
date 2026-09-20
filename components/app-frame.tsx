@@ -1,19 +1,13 @@
 import { buttonVariants } from "@/components/ui/button";
-import {
-  ChartNoAxesCombined,
-  ClipboardPlus,
-  House,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { ClipboardPlus, HeartHandshake, House, UserRound, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-type NavKey = "today" | "add" | "history" | "account";
+type NavKey = "today" | "add" | "care" | "account";
 
 const navItems: { key: NavKey; label: string; href: string; icon: LucideIcon }[] = [
   { key: "today", label: "今日", href: "/", icon: House },
   { key: "add", label: "記錄", href: "/add", icon: ClipboardPlus },
-  { key: "history", label: "歷史", href: "/history", icon: ChartNoAxesCombined },
+  { key: "care", label: "照護", href: "/care", icon: HeartHandshake },
   { key: "account", label: "帳號", href: "/account", icon: UserRound },
 ];
 

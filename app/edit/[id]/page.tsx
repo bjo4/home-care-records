@@ -22,7 +22,7 @@ export default async function EditRecordPage({ params }: Props) {
 
   return (
     <AppFrame
-      active="history"
+      active="care"
       title="編輯紀錄"
       description="保留原記錄人；儲存後會標示最後修改者。"
     >

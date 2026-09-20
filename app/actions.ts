@@ -13,7 +13,7 @@ import {
   type Symptom,
   type TemperatureSite,
 } from "@/lib/care-records";
-import { changePassword } from "@/lib/auth";
+import { changePassword, createApiToken, revokeApiToken } from "@/lib/auth";
 import {
   addExam,
   addCareRecord,
@@ -201,6 +201,23 @@ export async function changePasswordAction(formData: FormData) {
   }
 
   redirect("/account?password=changed");
+}
+
+export async function createApiTokenAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const label = requiredString(formData, "label");
+  const { token } = await createApiToken(user.id, label);
+
+  revalidateCareViews();
+  redirect(`/account?newToken=${encodeURIComponent(token)}`);
+}
+
+export async function revokeApiTokenAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const tokenId = requiredString(formData, "tokenId");
+  await revokeApiToken(user.id, tokenId);
+
+  revalidateCareViews();
 }
 
 export async function saveReminderAction(formData: FormData) {

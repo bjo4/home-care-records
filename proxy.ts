@@ -11,6 +11,8 @@ const PUBLIC_PATHS = [
   "/site.webmanifest",
   "/manifest.webmanifest",
   "/api/reminders/due",
+  "/api/mcp",
+  "/mcp",
 ];
 const STATIC_FILE_PATTERN = /\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|webmanifest)$/;
 

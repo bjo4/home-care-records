@@ -228,12 +228,24 @@ export type VisitRecord = {
   lastEditedAt?: string;
 };
 
+export type ApiToken = {
+  id: string;
+  userId: string;
+  label: string;
+  prefix: string;
+  tokenHash: string;
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+};
+
 export type CareLogData = {
   records: CareRecord[];
   reminders: CareReminder[];
   medicationOrders: MedicationOrder[];
   exams: ExamRecord[];
   visits: VisitRecord[];
+  apiTokens: ApiToken[];
   users: UserAccount[];
   sessions: AuthSession[];
   loginAttempts: LoginAttempt[];
@@ -493,6 +505,7 @@ export function buildDemoData(): CareLogData {
     medicationOrders: [],
     exams: [],
     visits: [],
+    apiTokens: [],
     users: [],
     sessions: [],
     loginAttempts: [],

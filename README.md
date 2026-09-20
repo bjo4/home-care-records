@@ -78,6 +78,7 @@ PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,vickie:chang
 | `CARELOG_BOOTSTRAP_USERS` | 無 | 當資料檔沒有任何 users 時建立初始帳號；格式：`username:password:DisplayName`，多筆用逗號分隔 |
 | `CARELOG_COOKIE_SECURE` | `false` | 設為 `true` 時 session cookie 加上 `Secure`；若本機用 `http://127.0.0.1:8800` 測試請維持 `false` |
 | `CARELOG_REMINDER_TOKEN` | 無 | 選填；外部 bot 可用 `Authorization: Bearer <token>` 呼叫 `/api/reminders/due` |
+| `CARELOG_TOKEN_PEPPER` | `carelog-local-token-pepper` | API token hash pepper；production 建議設定固定隨機值 |
 
 範例：
 
@@ -117,6 +118,53 @@ Response:
 ```
 
 Browser requests can also use the normal `carelog_session` cookie. Without a valid session or bearer token, the API returns `401`.
+
+## MCP Server / MCP 伺服器
+
+CareLog provides a Streamable HTTP MCP endpoint:
+
+```text
+https://care.kuroshimae.cc/api/mcp
+```
+
+Alias:
+
+```text
+https://care.kuroshimae.cc/mcp
+```
+
+Create a token from `/account`:
+
+1. Open `/account`
+2. In **API Token / MCP**, enter a label such as `Cursor`
+3. Click `建立 token`
+4. Copy the `clr_...` secret immediately; it is shown once only
+5. Later the account page shows label, prefix, created time, last used time, and revoke
+
+Stored token data keeps only prefix + hash. The full token is never stored.
+
+Cursor / Claude style config example:
+
+```json
+{
+  "mcpServers": {
+    "carelog": {
+      "url": "https://care.kuroshimae.cc/api/mcp",
+      "headers": {
+        "Authorization": "Bearer clr_your_token_here"
+      }
+    }
+  }
+}
+```
+
+MCP tools:
+
+- `list_care_records`, `get_care_record`, `create_care_record`, `update_care_record`, `delete_care_record`
+- `list_reminders`, `create_reminder`, `update_reminder`, `complete_reminder`, `delete_reminder`
+- `list_medication_orders`, `create_medication_order`, `update_medication_order`, `delete_medication_order`
+- `list_exams`, `create_exam`, `update_exam`, `delete_exam`
+- `list_visits`, `create_visit`, `update_visit`, `delete_visit`
 
 ## 測試 / Tests
 

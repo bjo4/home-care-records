@@ -5,7 +5,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-import type { AuthSession, CareLogData, UserAccount } from "./care-records";
+import type { ApiToken, AuthSession, CareLogData, UserAccount } from "./care-records";
 import { getCareLog, saveCareLog } from "./care-store";
 export { SESSION_COOKIE_NAME } from "./auth-constants";
 
@@ -290,6 +290,89 @@ export async function deleteSession(token?: string, filePath?: string) {
   );
 }
 
+export async function createApiToken(
+  userId: string,
+  label: string,
+  filePath?: string,
+) {
+  const data = await getCareLog(filePath);
+  const token = `clr_${randomBytes(32).toString("base64url")}`;
+  const now = new Date().toISOString();
+  const record: ApiToken = {
+    id: createId(),
+    userId,
+    label: label.trim(),
+    prefix: token.slice(0, 12),
+    tokenHash: hashApiToken(token),
+    createdAt: now,
+  };
+
+  await saveCareLog({ ...data, apiTokens: [...data.apiTokens, record] }, filePath);
+  return { token, record };
+}
+
+export async function verifyApiToken(token?: string, filePath?: string) {
+  if (!token?.startsWith("clr_")) {
+    return null;
+  }
+
+  const data = await getCareLog(filePath);
+  const tokenHash = hashApiToken(token);
+  const record = data.apiTokens.find(
+    (candidate) => !candidate.revokedAt && candidate.tokenHash === tokenHash,
+  );
+
+  if (!record) {
+    return null;
+  }
+
+  const user = data.users.find((candidate) => candidate.id === record.userId);
+
+  if (!user) {
+    return null;
+  }
+
+  await saveCareLog(
+    {
+      ...data,
+      apiTokens: data.apiTokens.map((candidate) =>
+        candidate.id === record.id
+          ? { ...candidate, lastUsedAt: new Date().toISOString() }
+          : candidate,
+      ),
+    },
+    filePath,
+  );
+
+  return { user, token: { ...record, lastUsedAt: new Date().toISOString() } };
+}
+
+export async function revokeApiToken(
+  userId: string,
+  tokenId: string,
+  filePath?: string,
+) {
+  const data = await getCareLog(filePath);
+  let revoked: ApiToken | undefined;
+  const now = new Date().toISOString();
+
+  await saveCareLog(
+    {
+      ...data,
+      apiTokens: data.apiTokens.map((token) => {
+        if (token.id !== tokenId || token.userId !== userId) {
+          return token;
+        }
+        revoked = { ...token, revokedAt: now };
+        return revoked;
+      }),
+    },
+    filePath,
+  );
+
+  return revoked ?? null;
+}
+
 function makeSession(userId: string, now: Date) {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(now.getTime() + SESSION_DAYS * 24 * 60 * 60 * 1000);
@@ -306,6 +389,11 @@ function makeSession(userId: string, now: Date) {
 
 function hashSessionToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function hashApiToken(token: string) {
+  const pepper = process.env.CARELOG_TOKEN_PEPPER ?? "carelog-local-token-pepper";
+  return createHash("sha256").update(`${pepper}:${token}`).digest("hex");
 }
 
 function getLockout(data: CareLogData, username: string, now: Date) {

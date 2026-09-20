@@ -7,26 +7,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { getCareLog } from "@/lib/care-store";
 import { requireCurrentUser } from "@/lib/session";
 
-type Props = { searchParams?: Promise<{ edit?: string }> };
-
-export default async function MedsPage({ searchParams }: Props) {
-  const user = await requireCurrentUser();
-  const params = await searchParams;
+export default async function MedsPage() {
+  await requireCurrentUser();
   const data = await getCareLog();
-  const edit = data.medicationOrders.find((order) => order.id === params?.edit);
   const active = data.medicationOrders.filter((order) => order.status === "進行中");
   const stopped = data.medicationOrders.filter((order) => order.status === "已停");
 
   return (
-    <AppFrame active="today" title="用藥醫囑" description="保存目前進行中的用藥與停用紀錄。">
-      <MedForm user={user.displayName} edit={edit} />
+    <AppFrame active="care" title="用藥醫囑" description="保存目前進行中的用藥與停用紀錄。">
+      <a href="/meds/new" className="flex min-h-12 items-center justify-center rounded-2xl bg-emerald-700 px-4 font-bold text-white">新增醫囑</a>
       <MedList title="進行中" orders={active} />
       <MedList title="已停" orders={stopped} />
     </AppFrame>
   );
 }
 
-function MedForm({ user, edit }: { user: string; edit?: Awaited<ReturnType<typeof getCareLog>>["medicationOrders"][number] }) {
+export function MedForm({ user, edit }: { user: string; edit?: Awaited<ReturnType<typeof getCareLog>>["medicationOrders"][number] }) {
   return (
     <section className="rounded-3xl bg-white/95 p-4 shadow-sm">
       <h2 className="text-xl font-black">{edit ? "編輯醫囑" : "新增醫囑"}</h2>
@@ -54,7 +50,7 @@ function MedList({ title, orders }: { title: string; orders: Awaited<ReturnType<
   return (
     <section className="rounded-3xl bg-white/95 p-4 shadow-sm">
       <h2 className="text-xl font-black">{title}</h2>
-      {orders.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">尚無資料。</p> : <ol className="mt-3 grid gap-2">{orders.map((order) => <li key={order.id} className="rounded-2xl border bg-white p-3"><div className="flex justify-between gap-2"><div><p className="font-bold">{order.drugName} · {order.dose}</p><p className="text-sm text-muted-foreground">{order.frequency}｜{order.route}｜{order.scheduleHint}</p>{order.precautions ? <p className="mt-1 text-sm">{order.precautions}</p> : null}</div><a className="text-sm font-bold text-emerald-700" href={`/meds?edit=${order.id}`}>編輯</a></div><div className="mt-3 grid grid-cols-2 gap-2">{order.status === "進行中" ? <form action={stopMedicationOrderAction}><input type="hidden" name="id" value={order.id} /><Button type="submit" variant="secondary" className="w-full rounded-2xl">停用</Button></form> : <span />}<form action={deleteMedicationOrderAction}><input type="hidden" name="id" value={order.id} /><Button type="submit" variant="destructive" className="w-full rounded-2xl">刪除</Button></form></div></li>)}</ol>}
+      {orders.length === 0 ? <p className="mt-3 text-sm text-muted-foreground">尚無資料。</p> : <ol className="mt-3 grid gap-2">{orders.map((order) => <li key={order.id} className="rounded-2xl border bg-white p-3"><div className="flex justify-between gap-2"><div><p className="font-bold">{order.drugName} · {order.dose}</p><p className="text-sm text-muted-foreground">{order.frequency}｜{order.route}｜{order.scheduleHint}</p>{order.precautions ? <p className="mt-1 text-sm">{order.precautions}</p> : null}</div><a className="text-sm font-bold text-emerald-700" href={`/meds/${order.id}/edit`}>編輯</a></div><div className="mt-3 grid grid-cols-2 gap-2">{order.status === "進行中" ? <form action={stopMedicationOrderAction}><input type="hidden" name="id" value={order.id} /><Button type="submit" variant="secondary" className="w-full rounded-2xl">停用</Button></form> : <span />}<form action={deleteMedicationOrderAction}><input type="hidden" name="id" value={order.id} /><Button type="submit" variant="destructive" className="w-full rounded-2xl">刪除</Button></form></div></li>)}</ol>}
     </section>
   );
 }

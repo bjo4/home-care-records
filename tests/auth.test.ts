@@ -8,9 +8,12 @@ import {
   authenticateUser,
   bootstrapUsersIfEmpty,
   changePassword,
+  createApiToken,
   getUserBySessionToken,
   hashPassword,
   parseBootstrapUsers,
+  revokeApiToken,
+  verifyApiToken,
   verifyPassword,
 } from "../lib/auth";
 import { getCareLog } from "../lib/care-store";
@@ -137,6 +140,32 @@ test("logged-in users can change password with the current password", async () =
       (await authenticateUser("maria", "nuevo-secreto", filePath)).ok,
       true,
     );
+  } finally {
+    await cleanup();
+  }
+});
+
+test("api tokens are shown once, hashed, verified, and revoked", async () => {
+  const { filePath, cleanup } = await tempCareLog();
+
+  try {
+    await bootstrapUsersIfEmpty("warren:alpha:Warren", filePath);
+    const data = await getCareLog(filePath);
+    const user = data.users[0];
+    const created = await createApiToken(user.id, "Cursor MCP", filePath);
+
+    assert.match(created.token, /^clr_/);
+    assert.equal(created.record.prefix, created.token.slice(0, 12));
+    assert.equal(created.record.tokenHash.includes(created.token), false);
+
+    const verified = await verifyApiToken(created.token, filePath);
+    assert.equal(verified?.user.username, "warren");
+
+    const afterUse = await getCareLog(filePath);
+    assert.equal(Boolean(afterUse.apiTokens[0].lastUsedAt), true);
+
+    await revokeApiToken(user.id, created.record.id, filePath);
+    assert.equal(await verifyApiToken(created.token, filePath), null);
   } finally {
     await cleanup();
   }

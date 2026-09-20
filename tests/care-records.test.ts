@@ -212,6 +212,7 @@ test("today entries are grouped in reverse chronological order across all record
     medicationOrders: [],
     exams: [],
     visits: [],
+    apiTokens: [],
     users: [],
     sessions: [],
     loginAttempts: [],

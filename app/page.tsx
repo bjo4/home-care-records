@@ -18,37 +18,18 @@ export default async function Home() {
       active="today"
       title="今天照顧狀態"
       description="先看有沒有警示，再選一個最常用動作。"
-      actions={<PrimaryLink href="/add">去記錄</PrimaryLink>}
+      actions={
+        <>
+          <PrimaryLink href="/add">記一筆</PrimaryLink>
+          <PrimaryLink href="/care">照護入口</PrimaryLink>
+        </>
+      }
     >
-      <CareQuickLinks />
-      <HomeCareStrip reminders={dueReminders} activeMeds={activeMeds} />
       <TodaySummary data={data} todayEntries={todayEntries} />
+      <HomeCareStrip reminders={dueReminders} activeMeds={activeMeds} />
       <VitalCharts data={data} />
       <QuickCleanDayForm caregiver={user.displayName} nowInput={nowInput} />
     </AppFrame>
-  );
-}
-
-function CareQuickLinks() {
-  const links = [
-    ["/reminders", "提醒"],
-    ["/meds", "醫囑"],
-    ["/exams", "檢查"],
-    ["/visits", "看診"],
-  ] as const;
-
-  return (
-    <section className="grid grid-cols-4 gap-2">
-      {links.map(([href, label]) => (
-        <a
-          key={href}
-          href={href}
-          className="flex min-h-14 items-center justify-center rounded-2xl bg-white/90 text-sm font-black text-emerald-800 shadow-sm"
-        >
-          {label}
-        </a>
-      ))}
-    </section>
   );
 }
 

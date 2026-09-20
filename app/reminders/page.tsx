@@ -19,23 +19,21 @@ const recurrences = [
   ["custom", "自訂"],
 ];
 
-type Props = { searchParams?: Promise<{ edit?: string }> };
-
-export default async function RemindersPage({ searchParams }: Props) {
-  const user = await requireCurrentUser();
-  const params = await searchParams;
+export default async function RemindersPage() {
+  await requireCurrentUser();
   const data = await getCareLog();
-  const edit = data.reminders.find((item) => item.id === params?.edit);
   const due = getDueReminders(data);
   const all = [...data.reminders].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
 
   return (
-    <AppFrame active="today" title="提醒" description="今日待辦與未來 48 小時到期提醒。">
+    <AppFrame active="care" title="提醒" description="今日待辦與未來 48 小時到期提醒。">
       <section className="rounded-3xl bg-white/95 p-4 shadow-sm">
         <h2 className="text-xl font-black">即將到期</h2>
         <ReminderList reminders={due} empty="未來 48 小時沒有待辦提醒。" />
       </section>
-      <ReminderForm user={user.displayName} edit={edit} />
+      <a href="/reminders/new" className="flex min-h-12 items-center justify-center rounded-2xl bg-emerald-700 px-4 font-bold text-white">
+        新增提醒
+      </a>
       <section className="rounded-3xl bg-white/95 p-4 shadow-sm">
         <h2 className="text-xl font-black">所有提醒</h2>
         <ReminderList reminders={all} empty="尚無提醒。" showActions />
@@ -44,7 +42,7 @@ export default async function RemindersPage({ searchParams }: Props) {
   );
 }
 
-function ReminderForm({ user, edit }: { user: string; edit?: Awaited<ReturnType<typeof getCareLog>>["reminders"][number] }) {
+export function ReminderForm({ user, edit }: { user: string; edit?: Awaited<ReturnType<typeof getCareLog>>["reminders"][number] }) {
   return (
     <section className="rounded-3xl bg-white/95 p-4 shadow-sm">
       <h2 className="text-xl font-black">{edit ? "編輯提醒" : "新增提醒"}</h2>
@@ -82,7 +80,7 @@ function ReminderList({ reminders, empty, showActions = false }: { reminders: Aw
               <p className="text-sm text-muted-foreground">{formatDateTime(reminder.dueAt)} · {reminder.completed ? "已完成" : "待辦"}</p>
               {reminder.notes ? <p className="mt-1 text-sm">{reminder.notes}</p> : null}
             </div>
-            {showActions ? <a className="text-sm font-bold text-emerald-700" href={`/reminders?edit=${reminder.id}`}>編輯</a> : null}
+            {showActions ? <a className="text-sm font-bold text-emerald-700" href={`/reminders/${reminder.id}/edit`}>編輯</a> : null}
           </div>
           {showActions ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
