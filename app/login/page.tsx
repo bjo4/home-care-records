@@ -58,7 +58,7 @@ export default async function LoginPage({ searchParams }: Props) {
             </div>
           ) : null}
 
-          <form action={loginAction} className="grid gap-4">
+          <form action={loginAction} className="grid gap-4" noValidate>
             <div className="grid gap-2">
               <Label htmlFor="username">帳號</Label>
               <Input
@@ -66,7 +66,7 @@ export default async function LoginPage({ searchParams }: Props) {
                 name="username"
                 autoComplete="username"
                 placeholder="warren"
-                required
+                aria-required="true"
                 className="min-h-12"
               />
             </div>
@@ -77,7 +77,7 @@ export default async function LoginPage({ searchParams }: Props) {
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                required
+                aria-required="true"
                 className="min-h-12"
               />
             </div>
