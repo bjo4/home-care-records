@@ -9,9 +9,12 @@ import {
   addCareRecord,
   clearCareLog,
   clearCareRecords,
+  deleteCareRecord,
   emptyCareLogData,
   getCareLog,
   seedDemoCareLog,
+  saveCareLog,
+  updateCareRecord,
 } from "../lib/care-store";
 import { bootstrapUsersIfEmpty } from "../lib/auth";
 
@@ -115,6 +118,87 @@ test("clearing care records preserves family user accounts", async () => {
 
     assert.equal(cleared.records.length, 0);
     assert.deepEqual(cleared.users.map((user) => user.username), ["warren"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("records can be updated and deleted", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-edit-records-"));
+  const filePath = path.join(dir, "carelog.json");
+
+  try {
+    const record = await addCareRecord(
+      createRecord("temperature", {
+        datetime: "2026-09-20T07:30",
+        value: 36.9,
+        site: "耳",
+        recordedBy: "Warren",
+        notes: "",
+      }),
+      filePath,
+    );
+
+    const updated = await updateCareRecord(
+      record.id,
+      (current) => ({
+        ...current,
+        notes: "重測確認",
+        lastEditedBy: "姐姐",
+        lastEditedAt: "2026-09-20T08:00:00.000Z",
+      }),
+      filePath,
+    );
+
+    assert.equal(updated?.notes, "重測確認");
+    assert.equal(updated?.lastEditedBy, "姐姐");
+    assert.equal((await getCareLog(filePath)).records.length, 1);
+
+    const deleted = await deleteCareRecord(record.id, filePath);
+    assert.equal(deleted?.id, record.id);
+    assert.equal((await getCareLog(filePath)).records.length, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("legacy usernames sister and dad migrate to vickie and fanlee", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-user-migration-"));
+  const filePath = path.join(dir, "carelog.json");
+
+  try {
+    const now = "2026-09-20T08:00:00.000Z";
+    await saveCareLog(
+      {
+        ...emptyCareLogData(),
+        users: [
+          {
+            id: "u1",
+            username: "sister",
+            displayName: "姐姐",
+            passwordHash: "scrypt$legacy",
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: "u2",
+            username: "dad",
+            displayName: "爸爸",
+            passwordHash: "scrypt$legacy",
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      },
+      filePath,
+    );
+
+    const data = await getCareLog(filePath);
+    assert.deepEqual(data.users.map((user) => user.username), [
+      "vickie",
+      "fanlee",
+    ]);
+    assert.deepEqual(data.users.map((user) => user.displayName), ["姐姐", "爸爸"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

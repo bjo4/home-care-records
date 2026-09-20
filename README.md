@@ -39,7 +39,7 @@ Warren 家庭使用的私密居家照顧紀錄 web app。介面以繁體中文�
 第一次啟動如果資料檔還沒有使用者，請提供 bootstrap 帳號：
 
 ```bash
-export CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,sister:change-this-sister:姐姐,dad:change-this-dad:爸爸,maria:change-this-maria:María"
+export CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,vickie:change-this-vickie:姐姐,fanlee:change-this-fanlee:爸爸,maria:change-this-maria:María"
 npm install
 npm run dev
 ```
@@ -55,7 +55,7 @@ Production build 與啟動：
 ```bash
 npm ci
 npm run build
-PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,sister:change-this-sister:姐姐,dad:change-this-dad:爸爸,maria:change-this-maria:María" npm start
+PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,vickie:change-this-vickie:姐姐,fanlee:change-this-fanlee:爸爸,maria:change-this-maria:María" npm start
 ```
 
 部署目標可將 Cloudflare Tunnel 指到本機 `http://127.0.0.1:8800`，公開網域例如 `https://care.kuroshimae.cc`。本專案不會自行部署。
@@ -74,7 +74,7 @@ PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,sister:chang
 ```bash
 PORT=8800 \
 CARELOG_DATA_FILE=/var/lib/carelog/carelog.json \
-CARELOG_BOOTSTRAP_USERS="warren:replace-me-1:Warren,sister:replace-me-2:姐姐,dad:replace-me-3:爸爸,maria:replace-me-4:María" \
+CARELOG_BOOTSTRAP_USERS="warren:replace-me-1:Warren,vickie:replace-me-2:姐姐,fanlee:replace-me-3:爸爸,maria:replace-me-4:María" \
 CARELOG_COOKIE_SECURE=true \
 npm start
 ```
@@ -83,7 +83,7 @@ Bootstrap only runs when the JSON store has zero users. After the first successf
 
 ## Authentication / 認證
 
-- Seed usernames: `warren`, `sister`, `dad`, `maria`
+- Seed usernames: `warren`, `vickie`, `fanlee`, `maria`
 - Display names: `Warren`, `姐姐`, `爸爸`, `María`
 - Passwords are stored as `scrypt$...` hashes; plaintext passwords are never written to JSON.
 - Sessions use an `httpOnly` cookie named `carelog_session`; all app pages are protected except `/login` and static assets.

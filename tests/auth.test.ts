@@ -17,11 +17,11 @@ import { getCareLog } from "../lib/care-store";
 
 test("bootstrap parser accepts username:password:DisplayName entries", () => {
   assert.deepEqual(
-    parseBootstrapUsers("warren:secret:Warren,sister:p@ss:姐姐,dad:pw:爸爸,maria:hola:María"),
+    parseBootstrapUsers("warren:secret:Warren,vickie:p@ss:姐姐,fanlee:pw:爸爸,maria:hola:María"),
     [
       { username: "warren", password: "secret", displayName: "Warren" },
-      { username: "sister", password: "p@ss", displayName: "姐姐" },
-      { username: "dad", password: "pw", displayName: "爸爸" },
+      { username: "vickie", password: "p@ss", displayName: "姐姐" },
+      { username: "fanlee", password: "pw", displayName: "爸爸" },
       { username: "maria", password: "hola", displayName: "María" },
     ],
   );
@@ -41,7 +41,7 @@ test("bootstrap creates users only when no users exist", async () => {
 
   try {
     const created = await bootstrapUsersIfEmpty(
-      "warren:alpha:Warren,sister:beta:姐姐",
+      "warren:alpha:Warren,vickie:beta:姐姐",
       filePath,
     );
 
@@ -51,16 +51,16 @@ test("bootstrap creates users only when no users exist", async () => {
       data.users.map((user) => [user.username, user.displayName]),
       [
         ["warren", "Warren"],
-        ["sister", "姐姐"],
+        ["vickie", "姐姐"],
       ],
     );
     assert.equal(data.users[0].passwordHash.includes("alpha"), false);
 
-    const second = await bootstrapUsersIfEmpty("dad:gamma:爸爸", filePath);
+    const second = await bootstrapUsersIfEmpty("fanlee:gamma:爸爸", filePath);
     data = await getCareLog(filePath);
 
     assert.equal(second, false);
-    assert.deepEqual(data.users.map((user) => user.username), ["warren", "sister"]);
+    assert.deepEqual(data.users.map((user) => user.username), ["warren", "vickie"]);
   } finally {
     await cleanup();
   }

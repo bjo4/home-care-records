@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  type CareRecord,
   createRecord,
   type BloodPressurePosture,
   type Clothing,
@@ -15,7 +16,10 @@ import { changePassword } from "@/lib/auth";
 import {
   addCareRecord,
   clearCareRecords,
+  deleteCareRecord,
+  getCareLog,
   seedDemoCareLog,
+  updateCareRecord,
 } from "@/lib/care-store";
 import { clearSessionCookie, requireCurrentUser } from "@/lib/session";
 
@@ -119,6 +123,33 @@ export async function clearDataAction() {
   revalidateCareViews();
 }
 
+export async function deleteRecordAction(formData: FormData) {
+  await requireCurrentUser();
+  const recordId = requiredString(formData, "recordId");
+
+  await deleteCareRecord(recordId);
+  revalidateCareViews();
+}
+
+export async function updateRecordAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const recordId = requiredString(formData, "recordId");
+  const data = await getCareLog();
+  const original = data.records.find((record) => record.id === recordId);
+
+  if (!original) {
+    redirect("/history");
+  }
+
+  const editedAt = new Date().toISOString();
+  const editedBy = user.displayName;
+  const updated = buildEditedRecord(original, formData, editedBy, editedAt);
+
+  await updateCareRecord(recordId, () => updated);
+  revalidateCareViews();
+  redirect("/history");
+}
+
 export async function logoutAction() {
   await clearSessionCookie();
   redirect("/login");
@@ -148,6 +179,87 @@ function revalidateCareViews() {
   revalidatePath("/add");
   revalidatePath("/history");
   revalidatePath("/account");
+}
+
+function buildEditedRecord(
+  original: CareRecord,
+  formData: FormData,
+  lastEditedBy: string,
+  lastEditedAt: string,
+) {
+  const common = {
+    id: original.id,
+    createdAt: original.createdAt,
+    lastEditedBy,
+    lastEditedAt,
+  };
+
+  switch (original.type) {
+    case "temperature":
+      return {
+        ...createRecord("temperature", {
+          datetime: requiredString(formData, "datetime"),
+          value: requiredNumber(formData, "value"),
+          site: requiredString(formData, "site") as TemperatureSite,
+          recordedBy: original.recordedBy,
+          notes: optionalString(formData, "notes"),
+        }),
+        ...common,
+      };
+    case "bloodPressure":
+      return {
+        ...createRecord("bloodPressure", {
+          datetime: requiredString(formData, "datetime"),
+          systolic: requiredInteger(formData, "systolic"),
+          diastolic: requiredInteger(formData, "diastolic"),
+          pulse: optionalInteger(formData, "pulse"),
+          posture: requiredString(formData, "posture") as BloodPressurePosture,
+          recordedBy: original.recordedBy,
+          notes: optionalString(formData, "notes"),
+        }),
+        ...common,
+      };
+    case "medication":
+      return {
+        ...createRecord("medication", {
+          drugName: requiredString(formData, "drugName"),
+          taken: formData.get("taken") === "yes",
+          datetime: requiredString(formData, "datetime"),
+          confirmedBy: original.confirmedBy,
+          notes: optionalString(formData, "notes"),
+        }),
+        ...common,
+      };
+    case "symptoms": {
+      const cleanDay = formData.get("cleanDay") === "yes";
+      return {
+        ...createRecord("symptoms", {
+          datetime: requiredString(formData, "datetime"),
+          recordedBy: original.recordedBy,
+          cleanDay,
+          symptoms: cleanDay
+            ? []
+            : (formData.getAll("symptoms").map(String) as Symptom[]),
+          severity: (formData.get("severity")?.toString() || "無") as Severity,
+          clinicianNotified: formData.get("clinicianNotified") === "yes",
+          soughtCare: formData.get("soughtCare") === "yes",
+          notes: optionalString(formData, "notes"),
+        }),
+        ...common,
+      };
+    }
+    case "weight":
+      return {
+        ...createRecord("weight", {
+          datetime: requiredString(formData, "datetime"),
+          value: requiredNumber(formData, "value"),
+          clothing: requiredString(formData, "clothing") as Clothing,
+          recordedBy: original.recordedBy,
+          notes: optionalString(formData, "notes"),
+        }),
+        ...common,
+      };
+  }
 }
 
 function requiredString(formData: FormData, key: string) {

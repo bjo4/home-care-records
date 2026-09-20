@@ -68,6 +68,51 @@ export async function addCareRecord(
   return nextRecord;
 }
 
+export async function updateCareRecord(
+  recordId: string,
+  update: (record: CareRecord) => CareRecord,
+  filePath?: string,
+) {
+  filePath = dataFilePath(filePath);
+  const data = await getCareLog(filePath);
+  let updatedRecord: CareRecord | undefined;
+  const nextRecords = data.records.map((record) => {
+    if (record.id !== recordId) {
+      return record;
+    }
+
+    updatedRecord = update(record);
+    return updatedRecord;
+  });
+
+  if (!updatedRecord) {
+    return null;
+  }
+
+  await saveCareLog({ ...data, records: nextRecords }, filePath);
+  return updatedRecord;
+}
+
+export async function deleteCareRecord(recordId: string, filePath?: string) {
+  filePath = dataFilePath(filePath);
+  const data = await getCareLog(filePath);
+  const deleted = data.records.find((record) => record.id === recordId);
+
+  if (!deleted) {
+    return null;
+  }
+
+  await saveCareLog(
+    {
+      ...data,
+      records: data.records.filter((record) => record.id !== recordId),
+    },
+    filePath,
+  );
+
+  return deleted;
+}
+
 export async function clearCareLog(filePath?: string) {
   filePath = dataFilePath(filePath);
   const empty = emptyCareLogData();
@@ -128,8 +173,20 @@ export function emptyCareLogData(): CareLogData {
 export function normalizeCareLogData(data: Partial<CareLogData>): CareLogData {
   return {
     records: Array.isArray(data.records) ? data.records : [],
-    users: Array.isArray(data.users) ? data.users : [],
+    users: Array.isArray(data.users) ? data.users.map(migrateUser) : [],
     sessions: Array.isArray(data.sessions) ? data.sessions : [],
     loginAttempts: Array.isArray(data.loginAttempts) ? data.loginAttempts : [],
   };
+}
+
+function migrateUser(user: CareLogData["users"][number]) {
+  if (user.username === "sister") {
+    return { ...user, username: "vickie" };
+  }
+
+  if (user.username === "dad") {
+    return { ...user, username: "fanlee" };
+  }
+
+  return user;
 }

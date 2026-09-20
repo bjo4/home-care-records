@@ -38,7 +38,7 @@ test("blood pressure records mark common high and low ranges as abnormal", () =>
     diastolic: 92,
     pulse: 86,
     posture: "坐",
-    recordedBy: "姊姊",
+    recordedBy: "姐姐",
     notes: "",
   });
 
