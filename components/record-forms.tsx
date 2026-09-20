@@ -1,4 +1,5 @@
 import {
+  addBloodGlucoseAction,
   addBloodPressureAction,
   addMedicationAction,
   addSymptomsAction,
@@ -13,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   BP_POSTURES,
   CLOTHING_OPTIONS,
+  GLUCOSE_MEAL_TIMINGS,
   MEDICATION_PRESETS,
   SEVERITY_OPTIONS,
   SYMPTOM_OPTIONS,
@@ -28,6 +30,7 @@ type Props = {
 export type RecordKind =
   | "temperature"
   | "bloodPressure"
+  | "bloodGlucose"
   | "medication"
   | "symptoms"
   | "weight";
@@ -39,6 +42,7 @@ export const ADD_RECORD_OPTIONS: {
 }[] = [
   { kind: "temperature", title: "體溫", description: "早晚量測，輸入 °C 與部位" },
   { kind: "bloodPressure", title: "血壓", description: "收縮壓、舒張壓、脈搏" },
+  { kind: "bloodGlucose", title: "血糖", description: "輸入 mg/dL 與飯前/飯後時機" },
   { kind: "medication", title: "吃藥確認", description: "確認常用藥是否已吃" },
   { kind: "symptoms", title: "警訊症狀", description: "有異狀時填寫症狀與嚴重度" },
   { kind: "weight", title: "體重", description: "固定時間記 kg 與衣著" },
@@ -65,6 +69,7 @@ export function RecordForms({ caregiver, nowInput }: Props) {
       <div className="grid gap-3 lg:grid-cols-2">
         <TemperatureForm caregiver={caregiver} nowInput={nowInput} />
         <BloodPressureForm caregiver={caregiver} nowInput={nowInput} />
+        <BloodGlucoseForm caregiver={caregiver} nowInput={nowInput} />
         <MedicationForm caregiver={caregiver} nowInput={nowInput} />
         <SymptomsForm caregiver={caregiver} nowInput={nowInput} />
         <WeightForm caregiver={caregiver} nowInput={nowInput} />
@@ -113,6 +118,8 @@ export function SingleRecordForm({
       return <TemperatureForm caregiver={caregiver} nowInput={nowInput} open />;
     case "bloodPressure":
       return <BloodPressureForm caregiver={caregiver} nowInput={nowInput} open />;
+    case "bloodGlucose":
+      return <BloodGlucoseForm caregiver={caregiver} nowInput={nowInput} open />;
     case "medication":
       return <MedicationForm caregiver={caregiver} nowInput={nowInput} open />;
     case "symptoms":
@@ -208,6 +215,29 @@ function MedicationForm({ caregiver, nowInput, open }: Props & { open?: boolean 
           <Textarea id="med-notes" name="notes" placeholder="例如：漏吃、吃後吐掉、依醫囑暫停" />
         </Field>
         <SubmitButton>新增吃藥確認</SubmitButton>
+      </form>
+    </FormCard>
+  );
+}
+
+function BloodGlucoseForm({ caregiver, nowInput, open }: Props & { open?: boolean }) {
+  return (
+    <FormCard title="血糖" description="輸入 mg/dL，並標記飯前、飯後或空腹。" open={open}>
+      <form action={addBloodGlucoseAction} className="grid gap-3">
+        <HiddenCaregiver name="recordedBy" caregiver={caregiver} />
+        <Field label="時間" htmlFor="glucose-datetime">
+          <Input id="glucose-datetime" name="datetime" type="datetime-local" defaultValue={nowInput} required />
+        </Field>
+        <Field label="血糖（mg/dL）" htmlFor="glucose-value">
+          <Input id="glucose-value" name="value" type="number" min="20" max="600" placeholder="104" required />
+        </Field>
+        <Field label="量測時機" htmlFor="glucose-mealTiming">
+          <NativeSelect id="glucose-mealTiming" name="mealTiming" options={GLUCOSE_MEAL_TIMINGS} defaultValue="其他/未指定" />
+        </Field>
+        <Field label="備註" htmlFor="glucose-notes">
+          <Textarea id="glucose-notes" name="notes" placeholder="例如：早餐前、飯後 2 小時" />
+        </Field>
+        <SubmitButton>新增血糖</SubmitButton>
       </form>
     </FormCard>
   );
