@@ -24,6 +24,25 @@ type Props = {
   nowInput: string;
 };
 
+export type RecordKind =
+  | "temperature"
+  | "bloodPressure"
+  | "medication"
+  | "symptoms"
+  | "weight";
+
+export const ADD_RECORD_OPTIONS: {
+  kind: RecordKind;
+  title: string;
+  description: string;
+}[] = [
+  { kind: "temperature", title: "體溫", description: "早晚量測，輸入 °C 與部位" },
+  { kind: "bloodPressure", title: "血壓", description: "收縮壓、舒張壓、脈搏" },
+  { kind: "medication", title: "吃藥確認", description: "確認常用藥是否已吃" },
+  { kind: "symptoms", title: "警訊症狀", description: "有異狀時填寫症狀與嚴重度" },
+  { kind: "weight", title: "體重", description: "固定時間記 kg 與衣著" },
+];
+
 export function RecordForms({ caregiver, nowInput }: Props) {
   return (
     <section id="quick-add" className="grid gap-4 scroll-mt-24">
@@ -53,7 +72,7 @@ export function RecordForms({ caregiver, nowInput }: Props) {
   );
 }
 
-function QuickCleanDayForm({ caregiver, nowInput }: Props) {
+export function QuickCleanDayForm({ caregiver, nowInput }: Props) {
   return (
     <form
       action={addSymptomsAction}
@@ -80,9 +99,28 @@ function QuickCleanDayForm({ caregiver, nowInput }: Props) {
   );
 }
 
-function TemperatureForm({ caregiver, nowInput }: Props) {
+export function SingleRecordForm({
+  kind,
+  caregiver,
+  nowInput,
+}: Props & { kind: RecordKind }) {
+  switch (kind) {
+    case "temperature":
+      return <TemperatureForm caregiver={caregiver} nowInput={nowInput} open />;
+    case "bloodPressure":
+      return <BloodPressureForm caregiver={caregiver} nowInput={nowInput} open />;
+    case "medication":
+      return <MedicationForm caregiver={caregiver} nowInput={nowInput} open />;
+    case "symptoms":
+      return <SymptomsForm caregiver={caregiver} nowInput={nowInput} open />;
+    case "weight":
+      return <WeightForm caregiver={caregiver} nowInput={nowInput} open />;
+  }
+}
+
+function TemperatureForm({ caregiver, nowInput, open }: Props & { open?: boolean }) {
   return (
-    <FormCard title="體溫" description="早晚量測，37.5°C 以上會標示警示。">
+    <FormCard title="體溫" description="早晚量測，37.5°C 以上會標示警示。" open={open}>
       <form action={addTemperatureAction} className="grid gap-3">
         <HiddenCaregiver name="recordedBy" caregiver={caregiver} />
         <Field label="時間" htmlFor="temperature-datetime">
@@ -103,9 +141,9 @@ function TemperatureForm({ caregiver, nowInput }: Props) {
   );
 }
 
-function BloodPressureForm({ caregiver, nowInput }: Props) {
+function BloodPressureForm({ caregiver, nowInput, open }: Props & { open?: boolean }) {
   return (
-    <FormCard title="血壓" description="收縮壓/舒張壓與脈搏，超出常見範圍會標示。">
+    <FormCard title="血壓" description="收縮壓/舒張壓與脈搏，超出常見範圍會標示。" open={open}>
       <form action={addBloodPressureAction} className="grid gap-3">
         <HiddenCaregiver name="recordedBy" caregiver={caregiver} />
         <Field label="時間" htmlFor="bp-datetime">
@@ -134,9 +172,9 @@ function BloodPressureForm({ caregiver, nowInput }: Props) {
   );
 }
 
-function MedicationForm({ caregiver, nowInput }: Props) {
+function MedicationForm({ caregiver, nowInput, open }: Props & { open?: boolean }) {
   return (
-    <FormCard title="吃藥確認" description="預設早晨常用藥，可直接改成其他藥名或分類。">
+    <FormCard title="吃藥確認" description="預設早晨常用藥，可直接改成其他藥名或分類。" open={open}>
       <form action={addMedicationAction} className="grid gap-3">
         <HiddenCaregiver name="confirmedBy" caregiver={caregiver} />
         <Field label="時間" htmlFor="med-datetime">
@@ -171,9 +209,9 @@ function MedicationForm({ caregiver, nowInput }: Props) {
   );
 }
 
-function SymptomsForm({ caregiver, nowInput }: Props) {
+function SymptomsForm({ caregiver, nowInput, open }: Props & { open?: boolean }) {
   return (
-    <FormCard title="警訊症狀" description="有任何異狀時填寫；無異狀可用上方一鍵記錄。">
+    <FormCard title="警訊症狀" description="有任何異狀時填寫；無異狀可用上方一鍵記錄。" open={open}>
       <form action={addSymptomsAction} className="grid gap-3">
         <HiddenCaregiver name="recordedBy" caregiver={caregiver} />
         <input type="hidden" name="cleanDay" value="no" />
@@ -210,9 +248,9 @@ function SymptomsForm({ caregiver, nowInput }: Props) {
   );
 }
 
-function WeightForm({ caregiver, nowInput }: Props) {
+function WeightForm({ caregiver, nowInput, open }: Props & { open?: boolean }) {
   return (
-    <FormCard title="體重" description="建議固定早晨、相似衣著；日變化 1kg 以上會標示。">
+    <FormCard title="體重" description="建議固定早晨、相似衣著；日變化 1kg 以上會標示。" open={open}>
       <form action={addWeightAction} className="grid gap-3">
         <HiddenCaregiver name="recordedBy" caregiver={caregiver} />
         <Field label="時間" htmlFor="weight-datetime">
@@ -237,13 +275,15 @@ function FormCard({
   title,
   description,
   children,
+  open,
 }: {
   title: string;
   description: string;
   children: ReactNode;
+  open?: boolean;
 }) {
   return (
-    <details className="group rounded-3xl border border-white/80 bg-white/95 shadow-sm open:ring-2 open:ring-emerald-200">
+    <details open={open} className="group rounded-3xl border border-white/80 bg-white/95 shadow-sm open:ring-2 open:ring-emerald-200">
       <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <span>
           <span className="block text-lg font-black">{title}</span>

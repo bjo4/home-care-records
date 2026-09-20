@@ -126,77 +126,10 @@ export function HistorySection({ data }: { data: CareLogData }) {
 
   return (
     <section id="history" className="grid gap-4">
-      <div>
-        <p className="text-sm font-semibold text-emerald-700">歷史趨勢</p>
-        <h2 className="text-2xl font-bold tracking-tight">最近紀錄與圖表</h2>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <TrendCard
-          title="體溫趨勢"
-          description="°C，37.5 以上警示"
-        >
-          <LineChart
-            series={[
-              {
-                label: "體溫",
-                color: "#dc2626",
-                points: temperatures.map((record) => ({
-                  label: formatShortDateTime(record.datetime),
-                  value: record.value,
-                })),
-              },
-            ]}
-            suffix="°C"
-          />
-        </TrendCard>
-        <TrendCard
-          title="血壓趨勢"
-          description="收縮壓 / 舒張壓"
-        >
-          <LineChart
-            series={[
-              {
-                label: "收縮壓",
-                color: "#2563eb",
-                points: bloodPressures.map((record) => ({
-                  label: formatShortDateTime(record.datetime),
-                  value: record.systolic,
-                })),
-              },
-              {
-                label: "舒張壓",
-                color: "#16a34a",
-                points: bloodPressures.map((record) => ({
-                  label: formatShortDateTime(record.datetime),
-                  value: record.diastolic,
-                })),
-              },
-            ]}
-            suffix=" mmHg"
-          />
-        </TrendCard>
-        <TrendCard title="體重趨勢" description="kg">
-          <LineChart
-            series={[
-              {
-                label: "體重",
-                color: "#7c3aed",
-                points: weights.map((record) => ({
-                  label: formatShortDateTime(record.datetime),
-                  value: record.value,
-                })),
-              },
-            ]}
-            suffix="kg"
-          />
-        </TrendCard>
-      </div>
-
       <Card className="bg-white/95 shadow-sm">
         <CardHeader>
-          <CardTitle>所有紀錄</CardTitle>
-          <CardDescription>最近 30 筆，所有照顧者輸入都會顯示姓名。</CardDescription>
+          <CardTitle>最近紀錄</CardTitle>
+          <CardDescription>最近 30 筆，先看文字列表最省力。</CardDescription>
         </CardHeader>
         <CardContent>
           {records.length === 0 ? (
@@ -209,6 +142,73 @@ export function HistorySection({ data }: { data: CareLogData }) {
           )}
         </CardContent>
       </Card>
+
+      <details className="rounded-3xl border border-white/80 bg-white/95 shadow-sm">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 py-3">
+          <span>
+            <span className="block text-lg font-black">趨勢圖</span>
+            <span className="text-sm text-muted-foreground">需要比較時再展開</span>
+          </span>
+          <span className="rounded-full bg-muted px-3 py-2 text-sm font-bold text-muted-foreground">
+            展開
+          </span>
+        </summary>
+        <div className="grid gap-4 border-t bg-stone-50/60 p-4">
+          <TrendCard title="體溫趨勢" description="°C，37.5 以上警示">
+            <LineChart
+              series={[
+                {
+                  label: "體溫",
+                  color: "#dc2626",
+                  points: temperatures.map((record) => ({
+                    label: formatShortDateTime(record.datetime),
+                    value: record.value,
+                  })),
+                },
+              ]}
+              suffix="°C"
+            />
+          </TrendCard>
+          <TrendCard title="血壓趨勢" description="收縮壓 / 舒張壓">
+            <LineChart
+              series={[
+                {
+                  label: "收縮壓",
+                  color: "#2563eb",
+                  points: bloodPressures.map((record) => ({
+                    label: formatShortDateTime(record.datetime),
+                    value: record.systolic,
+                  })),
+                },
+                {
+                  label: "舒張壓",
+                  color: "#16a34a",
+                  points: bloodPressures.map((record) => ({
+                    label: formatShortDateTime(record.datetime),
+                    value: record.diastolic,
+                  })),
+                },
+              ]}
+              suffix=" mmHg"
+            />
+          </TrendCard>
+          <TrendCard title="體重趨勢" description="kg">
+            <LineChart
+              series={[
+                {
+                  label: "體重",
+                  color: "#7c3aed",
+                  points: weights.map((record) => ({
+                    label: formatShortDateTime(record.datetime),
+                    value: record.value,
+                  })),
+                },
+              ]}
+              suffix="kg"
+            />
+          </TrendCard>
+        </div>
+      </details>
     </section>
   );
 }
