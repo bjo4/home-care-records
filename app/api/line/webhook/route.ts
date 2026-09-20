@@ -4,11 +4,13 @@ import { createRecord } from "@/lib/care-records";
 import { addCareRecord, getCareLog } from "@/lib/care-store";
 import {
   bindLineUser,
+  buildAgendaFlexMessage,
   buildMenuFlexMessage,
   buildTodayRecordsFlexMessage,
   createCareRecordFromLineText,
   findLineBinding,
   getLineConversation,
+  isAgendaCommand,
   isLineMenuCommand,
   isTodayRecordsCommand,
   setPendingLineInput,
@@ -64,6 +66,9 @@ async function handleEvent(event: LineEvent) {
     if (isTodayRecordsCommand(text)) {
       return replyTodayRecords(event.replyToken, conversationId, senderUserId);
     }
+    if (isAgendaCommand(text)) {
+      return replyAgenda(event.replyToken, conversationId, senderUserId);
+    }
     if (/^CL-[0-9A-F]{6}$/i.test(text)) {
       const binding = await bindLineUser(conversationId, text, sourceType);
       if (!binding) {
@@ -86,6 +91,9 @@ async function handleEvent(event: LineEvent) {
     const action = data.get("action");
     if (action === "records") {
       return replyTodayRecords(event.replyToken, conversationId, senderUserId);
+    }
+    if (action === "agenda" || action === "schedule") {
+      return replyAgenda(event.replyToken, conversationId, senderUserId);
     }
     const kind = data.get("type") as
       | "temperature"
@@ -135,6 +143,19 @@ async function replyTodayRecords(
     return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
   }
   return reply(replyToken, [buildTodayRecordsFlexMessage(careData)]);
+}
+
+async function replyAgenda(
+  replyToken: string,
+  conversationId: string,
+  senderUserId?: string,
+) {
+  const careData = await getCareLog();
+  const binding = findLineBinding(careData, conversationId, senderUserId);
+  if (!binding) {
+    return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
+  }
+  return reply(replyToken, [buildAgendaFlexMessage(careData)]);
 }
 
 function promptFor(kind: string) {
