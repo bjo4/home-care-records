@@ -349,6 +349,9 @@ export function emptyCareLogData(): CareLogData {
     exams: [],
     visits: [],
     apiTokens: [],
+    lineBindings: [],
+    lineBindCodes: [],
+    linePendingInputs: [],
     users: [],
     sessions: [],
     loginAttempts: [],
@@ -365,6 +368,11 @@ export function normalizeCareLogData(data: Partial<CareLogData>): CareLogData {
     exams: Array.isArray(data.exams) ? data.exams : [],
     visits: Array.isArray(data.visits) ? data.visits : [],
     apiTokens: Array.isArray(data.apiTokens) ? data.apiTokens : [],
+    lineBindings: Array.isArray(data.lineBindings) ? data.lineBindings : [],
+    lineBindCodes: Array.isArray(data.lineBindCodes) ? data.lineBindCodes : [],
+    linePendingInputs: Array.isArray(data.linePendingInputs)
+      ? data.linePendingInputs
+      : [],
     users: Array.isArray(data.users) ? data.users.map(migrateUser) : [],
     sessions: Array.isArray(data.sessions) ? data.sessions : [],
     loginAttempts: Array.isArray(data.loginAttempts) ? data.loginAttempts : [],
