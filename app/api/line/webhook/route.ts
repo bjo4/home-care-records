@@ -83,6 +83,7 @@ async function handleEvent(event: LineEvent) {
       return replyText(event.replyToken, `已綁定 ${target}。輸入「選單」開始記錄，或輸入「今日紀錄」查看摘要。`);
     }
     const result = await createCareRecordFromLineText(conversationId, text, senderUserId);
+    if (result.silent) return;
     return replyText(event.replyToken, result.message);
   }
 
