@@ -155,8 +155,85 @@ export type LoginAttempt = {
   failedAt: string;
 };
 
+export type ReminderType =
+  | "吃藥"
+  | "量體溫"
+  | "量血壓"
+  | "量血糖"
+  | "回診"
+  | "檢查"
+  | "禁食"
+  | "其他";
+
+export type ReminderRecurrence = "none" | "daily" | "weekly" | "custom";
+
+export type CareReminder = {
+  id: string;
+  type: ReminderType;
+  dueAt: string;
+  recurrence: ReminderRecurrence;
+  linkedRecordId?: string;
+  notes: string;
+  completed: boolean;
+  completedAt?: string;
+  completedBy?: Caregiver;
+  recordedBy: Caregiver;
+  createdAt: string;
+  lastEditedBy?: Caregiver;
+  lastEditedAt?: string;
+};
+
+export type MedicationOrder = {
+  id: string;
+  drugName: string;
+  dose: string;
+  frequency: string;
+  route: "口服" | "點滴" | "其他";
+  scheduleHint: string;
+  startDate: string;
+  stopDate?: string;
+  notes: string;
+  precautions: string;
+  status: "進行中" | "已停";
+  recordedBy: Caregiver;
+  createdAt: string;
+  lastEditedBy?: Caregiver;
+  lastEditedAt?: string;
+};
+
+export type ExamRecord = {
+  id: string;
+  name: string;
+  datetime: string;
+  location: string;
+  resultSummary: string;
+  nextDue?: string;
+  status: "待做" | "完成" | "待報告";
+  recordedBy: Caregiver;
+  createdAt: string;
+  lastEditedBy?: Caregiver;
+  lastEditedAt?: string;
+};
+
+export type VisitRecord = {
+  id: string;
+  department: string;
+  date: string;
+  doctor?: string;
+  instructions: string;
+  followUpDate?: string;
+  recordedBy: Caregiver;
+  createdAt: string;
+  lastEditedBy?: Caregiver;
+  lastEditedAt?: string;
+};
+
 export type CareLogData = {
   records: CareRecord[];
+  reminders: CareReminder[];
+  medicationOrders: MedicationOrder[];
+  exams: ExamRecord[];
+  visits: VisitRecord[];
   users: UserAccount[];
   sessions: AuthSession[];
   loginAttempts: LoginAttempt[];
@@ -412,6 +489,10 @@ export function buildDemoData(): CareLogData {
         notes: "今日無異狀",
       }),
     ],
+    reminders: [],
+    medicationOrders: [],
+    exams: [],
+    visits: [],
     users: [],
     sessions: [],
     loginAttempts: [],
