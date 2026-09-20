@@ -67,6 +67,7 @@ PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,sister:chang
 | `PORT` | `8800` | `npm run dev` 與 `npm start` 使用的 port |
 | `CARELOG_DATA_FILE` | `.data/carelog.json` | JSON 資料檔路徑 |
 | `CARELOG_BOOTSTRAP_USERS` | 無 | 當資料檔沒有任何 users 時建立初始帳號；格式：`username:password:DisplayName`，多筆用逗號分隔 |
+| `CARELOG_COOKIE_SECURE` | `false` | 設為 `true` 時 session cookie 加上 `Secure`；若本機用 `http://127.0.0.1:8800` 測試請維持 `false` |
 
 範例：
 
@@ -74,6 +75,7 @@ PORT=8800 CARELOG_BOOTSTRAP_USERS="warren:change-this-warren:Warren,sister:chang
 PORT=8800 \
 CARELOG_DATA_FILE=/var/lib/carelog/carelog.json \
 CARELOG_BOOTSTRAP_USERS="warren:replace-me-1:Warren,sister:replace-me-2:姐姐,dad:replace-me-3:爸爸,maria:replace-me-4:María" \
+CARELOG_COOKIE_SECURE=true \
 npm start
 ```
 

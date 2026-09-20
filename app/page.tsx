@@ -27,18 +27,19 @@ export default async function Home({ searchParams }: Props) {
   const nowInput = toDateTimeLocalInput(new Date());
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#d1fae5,transparent_32rem),linear-gradient(180deg,#fff7ed_0%,#f8fafc_45%,#ecfeff_100%)]">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="grid gap-4 rounded-3xl border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur md:grid-cols-[1fr_24rem] md:items-end">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#fed7aa,transparent_24rem),radial-gradient(circle_at_top_right,#bbf7d0,transparent_22rem),linear-gradient(180deg,#fff7ed_0%,#f8fafc_48%,#ecfeff_100%)]">
+      <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 pb-24 pt-4 sm:px-6 lg:px-8">
+        <header className="grid gap-4 rounded-[2rem] border border-white/70 bg-white/85 p-4 shadow-sm backdrop-blur md:grid-cols-[1fr_22rem] md:items-start md:p-6">
           <div className="grid gap-3">
-            <p className="text-sm font-bold text-emerald-700">CareLog / home-care-records</p>
+            <p className="w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700">
+              居家照顧紀錄
+            </p>
             <div>
-              <h1 className="text-3xl font-black tracking-tight sm:text-5xl">
-                居家照顧紀錄
+              <h1 className="text-3xl font-black tracking-tight text-stone-950 sm:text-5xl">
+                今天照顧狀態
               </h1>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Warren 家庭用的私密照護日誌：體溫、血壓、吃藥、警訊症狀、體重集中記錄，
-                讓疲累的照顧者用手機也能快速交班。
+              <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">
+                用最少步驟記下體溫、血壓、吃藥、症狀與體重。登入者會自動成為記錄人。
               </p>
             </div>
             <nav className="flex flex-wrap gap-2">
@@ -53,8 +54,8 @@ export default async function Home({ searchParams }: Props) {
               </a>
             </nav>
           </div>
-          <div className="grid gap-3">
-            <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow-sm">
+          <div id="account" className="grid gap-3 scroll-mt-24">
+            <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow-sm">
               <p className="text-sm font-semibold">目前登入</p>
               <h2 className="mt-1 text-2xl font-black">{user.displayName}</h2>
               <p className="text-sm text-emerald-800">
@@ -66,7 +67,7 @@ export default async function Home({ searchParams }: Props) {
                 </Button>
               </form>
             </section>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2" aria-label="資料工具">
               <form action={seedDemoDataAction}>
                 <Button type="submit" variant="outline" className="min-h-11 w-full">
                   載入 demo
@@ -90,16 +91,21 @@ export default async function Home({ searchParams }: Props) {
           異常門檻僅作家庭照護提醒，不取代醫療判斷；請依醫囑或照護團隊建議處理。
         </footer>
       </div>
+      <MobileBottomNav />
     </main>
   );
 }
 
 function ChangePasswordPanel({ status }: { status?: string }) {
   return (
-    <section className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
-      <h2 className="font-bold">修改密碼</h2>
+    <details className="rounded-3xl border border-white/70 bg-white/85 shadow-sm">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 py-3 font-bold">
+        <span>帳號與密碼</span>
+        <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">管理</span>
+      </summary>
+      <div className="border-t px-4 pb-4 pt-3">
       {status ? (
-        <p className={`mt-2 rounded-xl p-2 text-xs ${status === "changed" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
+        <p className={`rounded-xl p-2 text-xs ${status === "changed" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
           {passwordMessage(status)}
         </p>
       ) : null}
@@ -120,7 +126,33 @@ function ChangePasswordPanel({ status }: { status?: string }) {
           更新密碼
         </Button>
       </form>
-    </section>
+      </div>
+    </details>
+  );
+}
+
+function MobileBottomNav() {
+  const items = [
+    ["今日", "#today"],
+    ["新增", "#quick-add"],
+    ["歷史", "#history"],
+    ["帳號", "#account"],
+  ] as const;
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-white/90 px-3 py-2 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+      <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
+        {items.map(([label, href]) => (
+          <a
+            key={href}
+            href={href}
+            className="flex min-h-12 items-center justify-center rounded-2xl text-sm font-bold text-stone-700 hover:bg-emerald-50 hover:text-emerald-800"
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+    </nav>
   );
 }
 
