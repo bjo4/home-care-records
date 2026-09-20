@@ -1,4 +1,4 @@
-export const CAREGIVERS = ["Warren", "姊姊", "爸爸", "María"] as const;
+export const CAREGIVERS = ["Warren", "姐姐", "爸爸", "María"] as const;
 
 export const TEMPERATURE_SITES = ["額", "耳", "腋"] as const;
 export const BP_POSTURES = ["坐", "躺"] as const;
@@ -60,6 +60,8 @@ type BaseRecord = {
   notes: string;
   abnormal: boolean;
   createdAt: string;
+  lastEditedBy?: Caregiver;
+  lastEditedAt?: string;
 };
 
 export type TemperatureRecord = BaseRecord & {

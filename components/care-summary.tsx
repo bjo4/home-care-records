@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { RecordActions } from "@/components/record-actions";
 import {
   Card,
   CardContent,
@@ -286,6 +287,12 @@ function RecordList({ records }: { records: CareRecord[] }) {
               <p className="text-sm text-muted-foreground">{record.notes}</p>
             </>
           ) : null}
+          {record.lastEditedBy ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              最後修改：{record.lastEditedBy}
+            </p>
+          ) : null}
+          <RecordActions recordId={record.id} recordLabel={recordLabel(record)} />
         </li>
       ))}
     </ol>
