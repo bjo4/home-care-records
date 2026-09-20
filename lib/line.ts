@@ -218,9 +218,13 @@ export async function createCareRecordFromLineText(
 ) {
   const data = await getCareLog();
   const binding = findLineBinding(data, conversationId, fallbackUserId);
-  if (!binding) return { ok: false as const, message: "尚未綁定，請先輸入帳號頁的綁定碼。" };
+  if (!binding) {
+    return { ok: false as const, silent: true as const, message: "尚未綁定，請先輸入帳號頁的綁定碼。" };
+  }
   const pending = data.linePendingInputs.find((item) => item.lineUserId === conversationId);
-  if (!pending) return { ok: false as const, message: "請先從選單選擇要記錄的項目。" };
+  if (!pending) {
+    return { ok: false as const, silent: true as const, message: "請先從選單選擇要記錄的項目。" };
+  }
   const datetime = toLocalInput(new Date());
   const notes = "LINE quick log";
 

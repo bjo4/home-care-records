@@ -141,6 +141,36 @@ test("group quick-log falls back to sender user binding when group is unbound", 
   }
 });
 
+test("line text without pending or binding is silent instead of nagging", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-silent-"));
+  const filePath = path.join(dir, "carelog.json");
+  const previousDataFile = process.env.CARELOG_DATA_FILE;
+
+  try {
+    process.env.CARELOG_DATA_FILE = filePath;
+    await bootstrapUsersIfEmpty("warren:alpha:Warren", filePath);
+    const data = await getCareLog(filePath);
+    const code = await createLineBindCode(data.users[0].id, data.users[0].displayName);
+    await bindLineUser("Cfamily-group", code.code, "group");
+
+    const unbound = await createCareRecordFromLineText("Cunbound-group", "今晚吃什麼");
+    assert.equal(unbound.ok, false);
+    assert.equal(unbound.silent, true);
+
+    const noPending = await createCareRecordFromLineText("Cfamily-group", "今晚吃什麼", "Usender");
+    assert.equal(noPending.ok, false);
+    assert.equal(noPending.silent, true);
+
+    const saved = await getCareLog(filePath);
+    assert.equal(saved.records.length, 0);
+    assert.equal(saved.linePendingInputs.length, 0);
+  } finally {
+    if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
+    else process.env.CARELOG_DATA_FILE = previousDataFile;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("group binding is preferred over sender user binding", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-prefer-"));
   const filePath = path.join(dir, "carelog.json");
