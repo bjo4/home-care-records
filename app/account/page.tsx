@@ -7,6 +7,7 @@ type Props = {
   searchParams?: Promise<{
     password?: string;
     newToken?: string;
+    lineCode?: string;
   }>;
 };
 
@@ -15,6 +16,7 @@ export default async function AccountPage({ searchParams }: Props) {
   const params = await searchParams;
   const data = await getCareLog();
   const tokens = data.apiTokens.filter((token) => token.userId === user.id);
+  const lineBindings = data.lineBindings.filter((binding) => binding.userId === user.id);
 
   return (
     <AppFrame
@@ -22,7 +24,14 @@ export default async function AccountPage({ searchParams }: Props) {
       title="帳號"
       description="管理登入、密碼與本機資料工具。"
     >
-      <AccountPanel user={user} status={params?.password} newToken={params?.newToken} tokens={tokens} />
+      <AccountPanel
+        user={user}
+        status={params?.password}
+        newToken={params?.newToken}
+        tokens={tokens}
+        lineCode={params?.lineCode}
+        lineBindings={lineBindings}
+      />
     </AppFrame>
   );
 }
