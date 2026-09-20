@@ -11,6 +11,7 @@ import { addCareRecord, emptyCareLogData, getCareLog, saveCareLog } from "../lib
 import {
   bindLineUser,
   buildDueRemindersFlexMessage,
+  buildMenuFlexMessage,
   buildTodayRecordsFlexMessage,
   createCareRecordFromLineText,
   createLineBindCode,
@@ -190,6 +191,38 @@ test("leave unbinds a group conversation without removing 1:1 binding", async ()
     else process.env.CARELOG_DATA_FILE = previousDataFile;
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("menu flex splits 快速記錄 and 查看, and keeps one today-records postback", () => {
+  const menu = buildMenuFlexMessage();
+  assert.equal(menu.type, "flex");
+  assert.match(menu.altText, /CareLog/);
+  assert.match(menu.altText, /快速記錄|今日紀錄|選單/);
+
+  const texts = collectFlexTexts(menu);
+  assert.equal(texts.includes("快速記錄"), true);
+  assert.equal(texts.includes("查看"), true);
+  assert.equal(texts.includes("顯示紀錄"), false);
+
+  const buttons = collectFlexButtons(menu);
+  assert.deepEqual(
+    buttons
+      .filter((button) => button.data.startsWith("action=quick"))
+      .map((button) => ({ label: button.label, data: button.data, style: button.style })),
+    [
+      { label: "體溫", data: "action=quick&type=temperature", style: "secondary" },
+      { label: "血壓", data: "action=quick&type=bloodPressure", style: "secondary" },
+      { label: "血糖", data: "action=quick&type=bloodGlucose", style: "secondary" },
+      { label: "吃藥", data: "action=quick&type=medication", style: "secondary" },
+      { label: "今日無異狀", data: "action=quick&type=cleanDay", style: "primary" },
+    ],
+  );
+
+  const recordButtons = buttons.filter((button) => button.data === "action=records");
+  assert.equal(recordButtons.length, 1);
+  assert.equal(recordButtons[0]?.label, "今日紀錄");
+  assert.equal(buttons.some((button) => button.label === "顯示紀錄"), false);
+  assert.equal(collectFlexSeparators(menu) >= 1, true);
 });
 
 test("today records commands and summary cover vitals, meds, and symptoms", async () => {
@@ -399,15 +432,48 @@ function collectFlexTexts(node: unknown): string[] {
   const value = node as Record<string, unknown>;
   const texts = typeof value.text === "string" ? [value.text] : [];
   if (typeof value.altText === "string") texts.push(value.altText);
+  for (const child of walkFlexChildren(value)) texts.push(...collectFlexTexts(child));
+  return texts;
+}
+
+function collectFlexButtons(node: unknown): { label: string; data: string; style?: string }[] {
+  if (!node || typeof node !== "object") return [];
+  const value = node as Record<string, unknown>;
+  const buttons: { label: string; data: string; style?: string }[] = [];
+  const action = value.action;
+  if (
+    value.type === "button" &&
+    action &&
+    typeof action === "object" &&
+    typeof (action as { label?: unknown }).label === "string" &&
+    typeof (action as { data?: unknown }).data === "string"
+  ) {
+    buttons.push({
+      label: (action as { label: string }).label,
+      data: (action as { data: string }).data,
+      style: typeof value.style === "string" ? value.style : undefined,
+    });
+  }
+  for (const child of walkFlexChildren(value)) buttons.push(...collectFlexButtons(child));
+  return buttons;
+}
+
+function collectFlexSeparators(node: unknown): number {
+  if (!node || typeof node !== "object") return 0;
+  const value = node as Record<string, unknown>;
+  let count = value.type === "separator" ? 1 : 0;
+  for (const child of walkFlexChildren(value)) count += collectFlexSeparators(child);
+  return count;
+}
+
+function walkFlexChildren(value: Record<string, unknown>): unknown[] {
+  const children: unknown[] = [];
   for (const child of ["contents", "header", "hero", "body", "footer"] as const) {
     const next = value[child];
-    if (Array.isArray(next)) {
-      for (const item of next) texts.push(...collectFlexTexts(item));
-    } else if (next) {
-      texts.push(...collectFlexTexts(next));
-    }
+    if (Array.isArray(next)) children.push(...next);
+    else if (next) children.push(next);
   }
-  return texts;
+  return children;
 }
 
 test("legacy line bindings without sourceType normalize to user", async () => {
