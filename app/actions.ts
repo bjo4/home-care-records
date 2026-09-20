@@ -8,6 +8,7 @@ import {
   createRecord,
   type BloodPressurePosture,
   type Clothing,
+  type GlucoseMealTiming,
   type Severity,
   type Symptom,
   type TemperatureSite,
@@ -49,6 +50,22 @@ export async function addBloodPressureAction(formData: FormData) {
       diastolic: requiredInteger(formData, "diastolic"),
       pulse: optionalInteger(formData, "pulse"),
       posture: requiredString(formData, "posture") as BloodPressurePosture,
+      recordedBy: user.displayName,
+      notes: optionalString(formData, "notes"),
+    }),
+  );
+  revalidateCareViews();
+  redirect("/");
+}
+
+export async function addBloodGlucoseAction(formData: FormData) {
+  const user = await requireCurrentUser();
+
+  await addCareRecord(
+    createRecord("bloodGlucose", {
+      datetime: requiredString(formData, "datetime"),
+      value: requiredNumber(formData, "value"),
+      mealTiming: requiredString(formData, "mealTiming") as GlucoseMealTiming,
       recordedBy: user.displayName,
       notes: optionalString(formData, "notes"),
     }),
@@ -214,6 +231,17 @@ function buildEditedRecord(
           diastolic: requiredInteger(formData, "diastolic"),
           pulse: optionalInteger(formData, "pulse"),
           posture: requiredString(formData, "posture") as BloodPressurePosture,
+          recordedBy: original.recordedBy,
+          notes: optionalString(formData, "notes"),
+        }),
+        ...common,
+      };
+    case "bloodGlucose":
+      return {
+        ...createRecord("bloodGlucose", {
+          datetime: requiredString(formData, "datetime"),
+          value: requiredNumber(formData, "value"),
+          mealTiming: requiredString(formData, "mealTiming") as GlucoseMealTiming,
           recordedBy: original.recordedBy,
           notes: optionalString(formData, "notes"),
         }),
