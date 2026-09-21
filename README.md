@@ -4,15 +4,16 @@ Warren 家庭使用的私密居家照顧紀錄 web app。介面以繁體中文�
 
 ## 功能 / Features
 
-- 今日儀表板：快速新增按鈕、今日紀錄、最新體溫/血壓/血糖/體重摘要
-- 六類紀錄：
+- 今日儀表板：快速新增按鈕、今日紀錄、最新體溫/血壓/血糖/血氧/體重摘要
+- 七類紀錄：
   - 體溫：時間、溫度、量測部位（額/耳/腋）、記錄人、備註
   - 血壓：時間、收縮壓、舒張壓、脈搏（選填）、姿勢（坐/躺）、記錄人、備註
   - 血糖：時間、mg/dL、量測時機（飯前/飯後/空腹/其他）、記錄人、備註
+  - 血氧：時間、SpO₂ %（整數或一位小數）、脈搏（選填，血氧機）、記錄人、備註
   - 吃藥確認：藥名/類別、是否已吃、時間、確認人、備註
   - 警訊症狀：症狀 checklist、嚴重程度、是否通知醫護/就醫、今日無異狀一鍵紀錄
   - 體重：時間、kg、衣著（輕/重）、記錄人、備註
-- 歷史列表與簡易趨勢圖：體溫、血壓（收縮/舒張）、血糖、體重
+- 歷史列表與簡易趨勢圖：體溫、血壓（收縮/舒張）、血糖、血氧、體重
 - 個別帳號登入：scrypt 密碼雜湊、httpOnly session cookie、登入失敗 lockout
 - 登入後記錄人/確認人鎖定為目前使用者，避免代填錯人
 - 登出與登入者改密碼表單
@@ -35,11 +36,14 @@ Warren 家庭使用的私密居家照顧紀錄 web app。介面以繁體中文�
 | 血壓 | 理想上限 `<120/<80`；低標 `<90` 或 `<60`；高標 `>=130` 或 `>=80` | 衛福部國健署 / AHA-ACC 成人靜息血壓分級 |
 | 脈搏 | 有填寫時，`<60` 或 `>100 bpm` 標示提醒 | MedlinePlus / 臨床常用成人靜息脈搏範圍 |
 | 血糖 | 低標 `<70 mg/dL`；空腹高界 `>=100`；飯後參考 `140`；飯後高關注 `>=180` | 衛福部 / ADA fasting glucose 與 postmeal reference |
+| 血氧 | 常見正常帶 `95–100%`；低於 `95%` 標示留意；圖表低帶 `90%`；輸入參考 `70–100` | MedlinePlus / Cleveland Clinic pulse oximetry（居家 caution 採常見 95% 線） |
 | 吃藥 | 記錄為未吃/吐掉會標示 | 家庭照護流程 |
 | 症狀 | 非「今日無異狀」且有症狀、嚴重程度、通知醫護或就醫會標示 | 家庭照護流程 |
 | 體重 | 不設定健康 kg 範圍；僅沿用日變化 `>=1.0 kg` 提醒 | 家庭照護趨勢提醒 |
 
 Blood glucose UI note: 飯前/空腹較偏向空腹參考線（70/100）；飯後較偏向 140/180 參考線。All glucose chart lines are reference-only, not diagnostic.
+
+Blood oxygen UI note: 表單允許 `70–100`（整數或一位小數）。`95%` 是居家常見 caution 線（MedlinePlus 正常帶 95–100%；低於此標示留意）。圖表另畫 `90%` 低帶作參考。血氧機脈搏為選填，不單獨觸發異常標示。All SpO₂ lines are reference-only, not diagnostic.
 
 ## 本機執行 / Run locally
 
@@ -151,7 +155,7 @@ Binding flow:
 Flex quick-log menu:
 
 - Follow/join or text `選單` / `記錄`
-- Sections: `快速記錄` (`體溫`, `血壓`, `血糖`, `吃藥`, `今日無異狀`) and `查看` (`今日紀錄`)
+- Sections: `快速記錄` (`體溫`, `血壓`, `血糖`, `血氧`, `吃藥`, `今日無異狀`) and `查看` (`今日紀錄`)
 - Text commands `紀錄` / `今日紀錄` / `顯示紀錄` reply with today's care-record Flex card (carousel when many items; empty state is also a Flex card)
 - Postback starts a one-step text input flow and writes into the same CareLog JSON store
 - Group/room pending input is keyed by the conversation id; logging prefers the group binding, then falls back to the sender's 1:1 binding
@@ -230,7 +234,9 @@ npm run build
 ## Docs checked
 
 - Docs: Next.js 16.3.5 - App Router installation / scripts (https://nextjs.org/docs/app/getting-started/installation, checked 2026-09-20)
+- Docs: Next.js 16.3.5 - App Router forms / Server Actions (node_modules/next/dist/docs/01-app/02-guides/forms.md, checked 2026-09-21)
 - Docs: Next.js 16.3.5 - App Router route.js / Route Handlers (node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md, checked 2026-09-20)
 - Docs: Tailwind CSS 4 - Next.js framework guide (https://tailwindcss.com/docs/installation/framework-guides/nextjs, checked 2026-09-20)
 - Docs: shadcn/ui 4.21.0 - Next.js installation / add components (https://ui.shadcn.com/docs/installation/next, checked 2026-09-20)
 - Docs: tsx 4.23.13 - Node.js loader (https://github.com/privatenumber/tsx#nodejs-loader, checked 2026-09-20)
+- Docs: MedlinePlus Pulse Oximetry - normal SpO₂ 95–100% (https://medlineplus.gov/lab-tests/pulse-oximetry/, checked 2026-09-21)

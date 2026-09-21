@@ -112,6 +112,21 @@ function renderFields(record: CareRecord) {
           <Notes value={record.notes} />
         </>
       );
+    case "bloodOxygen":
+      return (
+        <>
+          <DateTimeField value={record.datetime} />
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="血氧（SpO₂ %）" htmlFor="value">
+              <Input id="value" name="value" type="number" step="0.1" min="70" max="100" defaultValue={record.value} required />
+            </Field>
+            <Field label="脈搏（選填）" htmlFor="pulse">
+              <Input id="pulse" name="pulse" type="number" min="30" max="220" defaultValue={record.pulse ?? ""} />
+            </Field>
+          </div>
+          <Notes value={record.notes} />
+        </>
+      );
     case "symptoms":
       return (
         <>

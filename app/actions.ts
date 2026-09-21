@@ -87,6 +87,22 @@ export async function addBloodGlucoseAction(formData: FormData) {
   redirect("/");
 }
 
+export async function addBloodOxygenAction(formData: FormData) {
+  const user = await requireCurrentUser();
+
+  await addCareRecord(
+    createRecord("bloodOxygen", {
+      datetime: requiredString(formData, "datetime"),
+      value: requiredNumber(formData, "value"),
+      pulse: optionalInteger(formData, "pulse"),
+      recordedBy: user.displayName,
+      notes: optionalString(formData, "notes"),
+    }),
+  );
+  revalidateCareViews();
+  redirect("/");
+}
+
 export async function addMedicationAction(formData: FormData) {
   const user = await requireCurrentUser();
 
@@ -437,6 +453,17 @@ function buildEditedRecord(
           datetime: requiredString(formData, "datetime"),
           value: requiredNumber(formData, "value"),
           mealTiming: requiredString(formData, "mealTiming") as GlucoseMealTiming,
+          recordedBy: original.recordedBy,
+          notes: optionalString(formData, "notes"),
+        }),
+        ...common,
+      };
+    case "bloodOxygen":
+      return {
+        ...createRecord("bloodOxygen", {
+          datetime: requiredString(formData, "datetime"),
+          value: requiredNumber(formData, "value"),
+          pulse: optionalInteger(formData, "pulse"),
           recordedBy: original.recordedBy,
           notes: optionalString(formData, "notes"),
         }),

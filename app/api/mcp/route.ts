@@ -37,7 +37,7 @@ const emptySchema = z.object({}).optional();
 const idSchema = z.object({ id: z.string().min(1) });
 const listRecordsSchema = z.object({ type: z.string().optional(), limit: z.number().int().positive().max(200).optional() }).optional();
 const careRecordSchema = z.object({
-  type: z.enum(["temperature", "bloodPressure", "bloodGlucose", "medication", "symptoms", "weight"]),
+  type: z.enum(["temperature", "bloodPressure", "bloodGlucose", "bloodOxygen", "medication", "symptoms", "weight"]),
   datetime: z.string().min(1),
   notes: z.string().optional().default(""),
   value: z.number().optional(),
@@ -192,6 +192,7 @@ function buildCareRecord(args: z.infer<typeof careRecordSchema>, userName: strin
     case "temperature": return createRecord("temperature", { datetime: args.datetime, value: requiredNumber(args.value, "value"), site: (args.site ?? "耳") as TemperatureSite, recordedBy: userName, notes: args.notes });
     case "bloodPressure": return createRecord("bloodPressure", { datetime: args.datetime, systolic: requiredNumber(args.systolic, "systolic"), diastolic: requiredNumber(args.diastolic, "diastolic"), pulse: args.pulse, posture: (args.posture ?? "坐") as BloodPressurePosture, recordedBy: userName, notes: args.notes });
     case "bloodGlucose": return createRecord("bloodGlucose", { datetime: args.datetime, value: requiredNumber(args.value, "value"), mealTiming: (args.mealTiming ?? "其他/未指定") as GlucoseMealTiming, recordedBy: userName, notes: args.notes });
+    case "bloodOxygen": return createRecord("bloodOxygen", { datetime: args.datetime, value: requiredNumber(args.value, "value"), pulse: args.pulse, recordedBy: userName, notes: args.notes });
     case "medication": return createRecord("medication", { datetime: args.datetime, drugName: args.drugName ?? "未命名藥物", taken: args.taken ?? true, confirmedBy: userName, notes: args.notes });
     case "symptoms": return createRecord("symptoms", { datetime: args.datetime, recordedBy: userName, cleanDay: args.cleanDay ?? false, symptoms: (args.symptoms ?? []) as Symptom[], severity: (args.severity ?? "輕微") as Severity, clinicianNotified: args.clinicianNotified ?? false, soughtCare: args.soughtCare ?? false, notes: args.notes });
     case "weight": return createRecord("weight", { datetime: args.datetime, value: requiredNumber(args.value, "value"), clothing: (args.clothing ?? "輕") as Clothing, recordedBy: userName, notes: args.notes });

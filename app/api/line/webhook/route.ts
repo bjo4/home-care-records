@@ -100,6 +100,7 @@ async function handleEvent(event: LineEvent) {
       | "temperature"
       | "bloodPressure"
       | "bloodGlucose"
+      | "bloodOxygen"
       | "medication"
       | "cleanDay"
       | null;
@@ -164,6 +165,7 @@ function promptFor(kind: string) {
     temperature: "請輸入體溫，例如：36.8",
     bloodPressure: "請輸入血壓，例如：120/80 72（脈搏可省略）",
     bloodGlucose: "請輸入血糖，例如：110 飯前",
+    bloodOxygen: "請輸入血氧，例如：98 或 98 72（脈搏可省略）",
     medication: "請輸入藥名與是否已吃，例如：心律整錠 是",
   };
   return prompts[kind] ?? "請輸入數值。";
