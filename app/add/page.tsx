@@ -14,6 +14,7 @@ import {
   Pill,
   Scale,
   Thermometer,
+  Wind,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ const ADD_ICONS: Record<RecordKind, LucideIcon> = {
   temperature: Thermometer,
   bloodPressure: HeartPulse,
   bloodGlucose: Droplet,
+  bloodOxygen: Wind,
   medication: Pill,
   symptoms: AlertTriangle,
   weight: Scale,

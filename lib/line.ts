@@ -3,6 +3,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   createRecord,
   getTodayEntries,
+  parseBloodOxygenInput,
   type CareLogData,
   type CareRecord,
   type CareReminder,
@@ -238,6 +239,9 @@ export async function createCareRecordFromLineText(
     } else if (pending.kind === "bloodGlucose") {
       const [valueText, timing = "其他/未指定"] = text.trim().split(/\s+/);
       await addCareRecord(createRecord("bloodGlucose", { datetime, value: Number(valueText), mealTiming: timing as never, recordedBy: binding.displayName, notes }));
+    } else if (pending.kind === "bloodOxygen") {
+      const { value, pulse } = parseBloodOxygenInput(text);
+      await addCareRecord(createRecord("bloodOxygen", { datetime, value, pulse, recordedBy: binding.displayName, notes }));
     } else if (pending.kind === "medication") {
       const [drugName, takenText = "是"] = text.trim().split(/\s+/);
       await addCareRecord(createRecord("medication", { datetime, drugName, taken: takenText !== "否", confirmedBy: binding.displayName, notes }));
@@ -275,6 +279,7 @@ export function buildMenuFlexMessage(): LineFlexMessage {
         menuButton("🌡️ 體溫", "secondary", "action=quick&type=temperature"),
         menuButton("🩺 血壓", "secondary", "action=quick&type=bloodPressure"),
         menuButton("🩸 血糖", "secondary", "action=quick&type=bloodGlucose"),
+        menuButton("🫁 血氧", "secondary", "action=quick&type=bloodOxygen"),
         menuButton("💊 吃藥", "secondary", "action=quick&type=medication"),
         menuButton("✅ 今日無異狀", "primary", "action=quick&type=cleanDay"),
       ]),
@@ -439,6 +444,7 @@ function recordLabel(record: CareRecord) {
     temperature: "體溫",
     bloodPressure: "血壓",
     bloodGlucose: "血糖",
+    bloodOxygen: "血氧",
     medication: "吃藥",
     symptoms: "症狀",
     weight: "體重",
@@ -454,6 +460,8 @@ function recordHeadline(record: CareRecord) {
       return `${record.systolic}/${record.diastolic}${record.pulse ? ` 脈搏${record.pulse}` : ""}`;
     case "bloodGlucose":
       return `${record.value} ${record.mealTiming}`;
+    case "bloodOxygen":
+      return `${formatSpo2(record.value)}%${record.pulse ? ` 脈搏${record.pulse}` : ""}`;
     case "medication":
       return `${record.drugName} ${record.taken ? "已吃" : "未吃"}`;
     case "symptoms":
@@ -670,6 +678,10 @@ function formatAgendaTime(value: string) {
     minute: "2-digit",
     hour12: false,
   }).format(date);
+}
+
+function formatSpo2(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function toLocalInput(date: Date) {

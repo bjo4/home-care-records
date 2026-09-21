@@ -6,9 +6,11 @@ import {
   buildDemoData,
   createRecord,
   getTodayEntries,
+  isAbnormalBloodOxygen,
   isAbnormalBloodPressure,
   isAbnormalTemperature,
   isAbnormalWeightChange,
+  parseBloodOxygenInput,
   MEDICATION_PRESETS,
   type CareLogData,
 } from "../lib/care-records";
@@ -131,6 +133,49 @@ test("blood glucose records keep meal timing and flag attention ranges", () => {
   assert.equal(fastingElevated.abnormal, true);
 });
 
+test("blood oxygen records keep SpO2, optional pulse, and flag below 95%", () => {
+  const low = createRecord("bloodOxygen", {
+    datetime: "2026-09-21T08:00",
+    value: 94,
+    pulse: 76,
+    recordedBy: "Warren",
+    notes: "休息後",
+  });
+  const normal = createRecord("bloodOxygen", {
+    datetime: "2026-09-21T08:10",
+    value: 98,
+    recordedBy: "姐姐",
+    notes: "",
+  });
+  const decimal = createRecord("bloodOxygen", {
+    datetime: "2026-09-21T08:15",
+    value: 95.5,
+    recordedBy: "爸爸",
+    notes: "",
+  });
+
+  assert.equal(low.type, "bloodOxygen");
+  assert.equal(low.value, 94);
+  assert.equal(low.pulse, 76);
+  assert.equal(low.recordedBy, "Warren");
+  assert.equal(low.notes, "休息後");
+  assert.equal(low.abnormal, true);
+  assert.equal(normal.abnormal, false);
+  assert.equal(normal.pulse, undefined);
+  assert.equal(decimal.abnormal, false);
+  assert.equal(isAbnormalBloodOxygen(ABNORMAL_THRESHOLDS.bloodOxygen.caution), false);
+  assert.equal(isAbnormalBloodOxygen(94.9), true);
+  assert.equal(isAbnormalBloodOxygen(95), false);
+});
+
+test("blood oxygen LINE-style input parses value and optional pulse", () => {
+  assert.deepEqual(parseBloodOxygenInput("98"), { value: 98 });
+  assert.deepEqual(parseBloodOxygenInput("98 72"), { value: 98, pulse: 72 });
+  assert.deepEqual(parseBloodOxygenInput("98.5"), { value: 98.5 });
+  assert.throws(() => parseBloodOxygenInput("abc"), /格式不正確|invalid/i);
+  assert.throws(() => parseBloodOxygenInput("98 xyz"), /格式不正確|invalid/i);
+});
+
 test("medication presets include editable morning medicines and steroid note", () => {
   assert.deepEqual(
     MEDICATION_PRESETS.map((preset) => preset.name),
@@ -234,6 +279,7 @@ test("demo data contains every MVP record type", () => {
 
   assert.deepEqual([...types].sort(), [
     "bloodGlucose",
+    "bloodOxygen",
     "bloodPressure",
     "medication",
     "symptoms",

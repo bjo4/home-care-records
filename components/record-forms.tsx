@@ -1,5 +1,6 @@
 import {
   addBloodGlucoseAction,
+  addBloodOxygenAction,
   addBloodPressureAction,
   addMedicationAction,
   addSymptomsAction,
@@ -31,6 +32,7 @@ export type RecordKind =
   | "temperature"
   | "bloodPressure"
   | "bloodGlucose"
+  | "bloodOxygen"
   | "medication"
   | "symptoms"
   | "weight";
@@ -43,6 +45,7 @@ export const ADD_RECORD_OPTIONS: {
   { kind: "temperature", title: "體溫", description: "早晚量測，輸入 °C 與部位" },
   { kind: "bloodPressure", title: "血壓", description: "收縮壓、舒張壓、脈搏" },
   { kind: "bloodGlucose", title: "血糖", description: "輸入 mg/dL 與飯前/飯後時機" },
+  { kind: "bloodOxygen", title: "血氧", description: "輸入 SpO₂ %，脈搏可選填" },
   { kind: "medication", title: "吃藥確認", description: "確認常用藥是否已吃" },
   { kind: "symptoms", title: "警訊症狀", description: "有異狀時填寫症狀與嚴重度" },
   { kind: "weight", title: "體重", description: "固定時間記 kg 與衣著" },
@@ -70,6 +73,7 @@ export function RecordForms({ caregiver, nowInput }: Props) {
         <TemperatureForm caregiver={caregiver} nowInput={nowInput} />
         <BloodPressureForm caregiver={caregiver} nowInput={nowInput} />
         <BloodGlucoseForm caregiver={caregiver} nowInput={nowInput} />
+        <BloodOxygenForm caregiver={caregiver} nowInput={nowInput} />
         <MedicationForm caregiver={caregiver} nowInput={nowInput} />
         <SymptomsForm caregiver={caregiver} nowInput={nowInput} />
         <WeightForm caregiver={caregiver} nowInput={nowInput} />
@@ -120,6 +124,8 @@ export function SingleRecordForm({
       return <BloodPressureForm caregiver={caregiver} nowInput={nowInput} open />;
     case "bloodGlucose":
       return <BloodGlucoseForm caregiver={caregiver} nowInput={nowInput} open />;
+    case "bloodOxygen":
+      return <BloodOxygenForm caregiver={caregiver} nowInput={nowInput} open />;
     case "medication":
       return <MedicationForm caregiver={caregiver} nowInput={nowInput} open />;
     case "symptoms":
@@ -238,6 +244,31 @@ function BloodGlucoseForm({ caregiver, nowInput, open }: Props & { open?: boolea
           <Textarea id="glucose-notes" name="notes" placeholder="例如：早餐前、飯後 2 小時" />
         </Field>
         <SubmitButton>新增血糖</SubmitButton>
+      </form>
+    </FormCard>
+  );
+}
+
+function BloodOxygenForm({ caregiver, nowInput, open }: Props & { open?: boolean }) {
+  return (
+    <FormCard title="血氧" description="SpO₂ %，低於 95% 會標示留意。脈搏可選填。" open={open}>
+      <form action={addBloodOxygenAction} className="grid gap-3">
+        <HiddenCaregiver name="recordedBy" caregiver={caregiver} />
+        <Field label="時間" htmlFor="oxygen-datetime">
+          <Input id="oxygen-datetime" name="datetime" type="datetime-local" defaultValue={nowInput} required />
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="血氧（SpO₂ %）" htmlFor="oxygen-value">
+            <Input id="oxygen-value" name="value" type="number" step="0.1" min="70" max="100" placeholder="98" required />
+          </Field>
+          <Field label="脈搏（選填）" htmlFor="oxygen-pulse">
+            <Input id="oxygen-pulse" name="pulse" type="number" min="30" max="220" placeholder="72" />
+          </Field>
+        </div>
+        <Field label="備註" htmlFor="oxygen-notes">
+          <Textarea id="oxygen-notes" name="notes" placeholder="例如：休息後、活動後、使用血氧機" />
+        </Field>
+        <SubmitButton>新增血氧</SubmitButton>
       </form>
     </FormCard>
   );

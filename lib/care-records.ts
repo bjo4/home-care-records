@@ -47,6 +47,11 @@ export const ABNORMAL_THRESHOLDS = {
     postMealReference: 140,
     high: 180,
   },
+  bloodOxygen: {
+    low: 70,
+    hypoxemia: 90,
+    caution: 95,
+  },
   weight: {
     dailyChangeKg: 1,
   },
@@ -63,6 +68,7 @@ export type RecordType =
   | "temperature"
   | "bloodPressure"
   | "bloodGlucose"
+  | "bloodOxygen"
   | "medication"
   | "symptoms"
   | "weight";
@@ -101,6 +107,13 @@ export type BloodGlucoseRecord = BaseRecord & {
   recordedBy: Caregiver;
 };
 
+export type BloodOxygenRecord = BaseRecord & {
+  type: "bloodOxygen";
+  value: number;
+  pulse?: number;
+  recordedBy: Caregiver;
+};
+
 export type MedicationRecord = BaseRecord & {
   type: "medication";
   drugName: string;
@@ -129,6 +142,7 @@ export type CareRecord =
   | TemperatureRecord
   | BloodPressureRecord
   | BloodGlucoseRecord
+  | BloodOxygenRecord
   | MedicationRecord
   | SymptomsRecord
   | WeightRecord;
@@ -261,7 +275,7 @@ export type LineBindCode = {
 
 export type LinePendingInput = {
   lineUserId: string;
-  kind: "temperature" | "bloodPressure" | "bloodGlucose" | "medication";
+  kind: "temperature" | "bloodPressure" | "bloodGlucose" | "bloodOxygen" | "medication";
   createdAt: string;
 };
 
@@ -290,6 +304,10 @@ type RecordInputMap = {
     notes?: string;
   };
   bloodGlucose: Omit<BloodGlucoseRecord, keyof BaseRecord | "abnormal"> & {
+    datetime: string;
+    notes?: string;
+  };
+  bloodOxygen: Omit<BloodOxygenRecord, keyof BaseRecord | "abnormal"> & {
     datetime: string;
     notes?: string;
   };
@@ -357,6 +375,33 @@ export function isAbnormalBloodGlucose(
   return value >= threshold.high;
 }
 
+export function isAbnormalBloodOxygen(value: number) {
+  return value < ABNORMAL_THRESHOLDS.bloodOxygen.caution;
+}
+
+export function parseBloodOxygenInput(text: string) {
+  const parts = text.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 1 || parts.length > 2) {
+    throw new Error("invalid blood oxygen");
+  }
+
+  const value = Number(parts[0]);
+  if (!Number.isFinite(value)) {
+    throw new Error("invalid blood oxygen");
+  }
+
+  if (parts.length === 1) {
+    return { value };
+  }
+
+  const pulse = Number(parts[1]);
+  if (!Number.isInteger(pulse)) {
+    throw new Error("invalid blood oxygen");
+  }
+
+  return { value, pulse };
+}
+
 export function isAbnormalWeightChange(value: number, previousValue?: number) {
   if (previousValue === undefined) {
     return false;
@@ -413,6 +458,17 @@ export function createRecord<T extends RecordType>(
         mealTiming: payload.mealTiming,
         recordedBy: payload.recordedBy,
         abnormal: isAbnormalBloodGlucose(payload.value, payload.mealTiming),
+      } as Extract<CareRecord, { type: T }>;
+    }
+    case "bloodOxygen": {
+      const payload = input as RecordInputMap["bloodOxygen"];
+      return {
+        ...base,
+        type,
+        value: payload.value,
+        pulse: payload.pulse,
+        recordedBy: payload.recordedBy,
+        abnormal: isAbnormalBloodOxygen(payload.value),
       } as Extract<CareRecord, { type: T }>;
     }
     case "medication": {
@@ -511,6 +567,13 @@ export function buildDemoData(): CareLogData {
         mealTiming: "飯前",
         recordedBy: "Warren",
         notes: "早餐前",
+      }),
+      createRecord("bloodOxygen", {
+        datetime: `${today}T07:48`,
+        value: 98,
+        pulse: 76,
+        recordedBy: "Warren",
+        notes: "",
       }),
       createRecord("weight", {
         datetime: `${today}T07:40`,

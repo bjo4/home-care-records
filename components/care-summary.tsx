@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import {
   ABNORMAL_THRESHOLDS,
   type BloodGlucoseRecord,
+  type BloodOxygenRecord,
   type BloodPressureRecord,
   type CareLogData,
   type CareRecord,
@@ -31,6 +32,7 @@ export function TodaySummary({ data, todayEntries }: Props) {
   const latestTemperature = latestOfType<TemperatureRecord>(data, "temperature");
   const latestBp = latestOfType<BloodPressureRecord>(data, "bloodPressure");
   const latestGlucose = latestOfType<BloodGlucoseRecord>(data, "bloodGlucose");
+  const latestOxygen = latestOfType<BloodOxygenRecord>(data, "bloodOxygen");
   const latestWeight = latestOfType<WeightRecord>(data, "weight");
   const alertCount = todayEntries.filter((record) => record.abnormal).length;
   const todayMeds = todayEntries.filter(
@@ -84,7 +86,7 @@ export function TodaySummary({ data, todayEntries }: Props) {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <MetricCard
           title="今日筆數"
           value={`${todayEntries.length}`}
@@ -107,6 +109,12 @@ export function TodaySummary({ data, todayEntries }: Props) {
           value={latestGlucose ? `${latestGlucose.value}` : "尚無"}
           helper={latestGlucose ? `${latestGlucose.mealTiming} mg/dL` : "先新增一筆"}
           abnormal={latestGlucose?.abnormal}
+        />
+        <MetricCard
+          title="最新血氧"
+          value={latestOxygen ? `${formatSpo2(latestOxygen.value)}%` : "尚無"}
+          helper={latestOxygen ? oxygenHelper(latestOxygen) : "先新增一筆"}
+          abnormal={latestOxygen?.abnormal}
         />
         <MetricCard
           title="最新體重"
@@ -195,6 +203,7 @@ export function VitalCharts({
   const temperatures = recordsOfType<TemperatureRecord>(data, "temperature");
   const bloodPressures = recordsOfType<BloodPressureRecord>(data, "bloodPressure");
   const bloodGlucose = recordsOfType<BloodGlucoseRecord>(data, "bloodGlucose");
+  const bloodOxygen = recordsOfType<BloodOxygenRecord>(data, "bloodOxygen");
   const weights = recordsOfType<WeightRecord>(data, "weight");
 
   return (
@@ -319,6 +328,33 @@ export function VitalCharts({
             {
               value: ABNORMAL_THRESHOLDS.bloodGlucose.low,
               label: "低標",
+              color: "#0f766e",
+            },
+          ]}
+        />
+      </TrendCard>
+      <TrendCard title="血氧趨勢" description="居家參考線：留意 95 / 低帶 90">
+        <LineChart
+          series={[
+            {
+              label: "SpO₂",
+              color: "#0284c7",
+              points: bloodOxygen.map((record) => ({
+                label: formatShortDateTime(record.datetime),
+                value: record.value,
+              })),
+            },
+          ]}
+          suffix="%"
+          referenceLines={[
+            {
+              value: ABNORMAL_THRESHOLDS.bloodOxygen.caution,
+              label: "留意 95",
+              color: "#dc2626",
+            },
+            {
+              value: ABNORMAL_THRESHOLDS.bloodOxygen.hypoxemia,
+              label: "低帶 90",
               color: "#0f766e",
             },
           ]}
@@ -587,6 +623,7 @@ function recordLabel(record: CareRecord) {
     temperature: "體溫",
     bloodPressure: "血壓",
     bloodGlucose: "血糖",
+    bloodOxygen: "血氧",
     medication: "吃藥",
     symptoms: "症狀",
     weight: "體重",
@@ -603,6 +640,8 @@ function recordHeadline(record: CareRecord) {
       return `${record.systolic}/${record.diastolic} mmHg${record.pulse ? `，脈搏 ${record.pulse}` : ""}（${record.posture}）`;
     case "bloodGlucose":
       return `${record.value} mg/dL（${record.mealTiming}）`;
+    case "bloodOxygen":
+      return `${formatSpo2(record.value)}%${record.pulse ? `，脈搏 ${record.pulse}` : ""}`;
     case "medication":
       return `${record.drugName}：${record.taken ? "已吃" : "未吃/吐掉"}`;
     case "symptoms":
@@ -622,6 +661,14 @@ function recordPerson(record: CareRecord) {
 
 function bpHelper(record: BloodPressureRecord) {
   return record.pulse ? `脈搏 ${record.pulse}` : "未記脈搏";
+}
+
+function oxygenHelper(record: BloodOxygenRecord) {
+  return record.pulse ? `脈搏 ${record.pulse}` : formatShortTime(record.datetime);
+}
+
+function formatSpo2(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function formatDateTime(value: string) {

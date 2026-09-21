@@ -70,8 +70,15 @@ test("line bind code maps line user and text input creates care record", async (
     const result = await createCareRecordFromLineText("line-user-1", "110 飯前");
     assert.equal(result.ok, true);
 
+    await setPendingLineInput("line-user-1", "bloodOxygen");
+    const oxygenResult = await createCareRecordFromLineText("line-user-1", "98 72");
+    assert.equal(oxygenResult.ok, true);
+
     const saved = await getCareLog(filePath);
-    assert.equal(saved.records.at(-1)?.type, "bloodGlucose");
+    const last = saved.records.at(-1);
+    assert.equal(last?.type, "bloodOxygen");
+    assert.equal(last && last.type === "bloodOxygen" ? last.value : undefined, 98);
+    assert.equal(last && last.type === "bloodOxygen" ? last.pulse : undefined, 72);
     assert.deepEqual(getLinePushTargets(saved), ["line-user-1"]);
   } finally {
     if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
@@ -134,6 +141,46 @@ test("group quick-log falls back to sender user binding when group is unbound", 
     const last = saved.records.at(-1);
     assert.equal(last?.type, "medication");
     assert.equal(last && last.type === "medication" ? last.confirmedBy : "", "Warren");
+  } finally {
+    if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
+    else process.env.CARELOG_DATA_FILE = previousDataFile;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("line pending blood oxygen parses value-only, optional pulse, and rejects junk", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-spo2-"));
+  const filePath = path.join(dir, "carelog.json");
+  const previousDataFile = process.env.CARELOG_DATA_FILE;
+
+  try {
+    process.env.CARELOG_DATA_FILE = filePath;
+    await bootstrapUsersIfEmpty("warren:alpha:Warren", filePath);
+    const data = await getCareLog(filePath);
+    const code = await createLineBindCode(data.users[0].id, data.users[0].displayName);
+    await bindLineUser("line-user-spo2", code.code);
+
+    await setPendingLineInput("line-user-spo2", "bloodOxygen");
+    const valueOnly = await createCareRecordFromLineText("line-user-spo2", "98.5");
+    assert.equal(valueOnly.ok, true);
+    const afterValueOnly = await getCareLog(filePath);
+    const first = afterValueOnly.records.at(-1);
+    assert.equal(first?.type, "bloodOxygen");
+    assert.equal(first && first.type === "bloodOxygen" ? first.value : undefined, 98.5);
+    assert.equal(first && first.type === "bloodOxygen" ? first.pulse : undefined, undefined);
+    assert.equal(first?.abnormal, false);
+
+    await setPendingLineInput("line-user-spo2", "bloodOxygen");
+    const invalid = await createCareRecordFromLineText("line-user-spo2", "abc");
+    assert.equal(invalid.ok, false);
+    assert.match(invalid.message, /格式不正確/);
+    assert.equal((await getCareLog(filePath)).linePendingInputs.length, 1);
+
+    await setPendingLineInput("line-user-spo2", "bloodOxygen");
+    const low = await createCareRecordFromLineText("line-user-spo2", "94");
+    assert.equal(low.ok, true);
+    const last = (await getCareLog(filePath)).records.at(-1);
+    assert.equal(last && last.type === "bloodOxygen" ? last.abnormal : undefined, true);
   } finally {
     if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
     else process.env.CARELOG_DATA_FILE = previousDataFile;
@@ -245,6 +292,7 @@ test("menu flex uses emoji labels and includes 未來行程 under 查看", () =>
       { label: "🌡️ 體溫", data: "action=quick&type=temperature", style: "secondary" },
       { label: "🩺 血壓", data: "action=quick&type=bloodPressure", style: "secondary" },
       { label: "🩸 血糖", data: "action=quick&type=bloodGlucose", style: "secondary" },
+      { label: "🫁 血氧", data: "action=quick&type=bloodOxygen", style: "secondary" },
       { label: "💊 吃藥", data: "action=quick&type=medication", style: "secondary" },
       { label: "✅ 今日無異狀", data: "action=quick&type=cleanDay", style: "primary" },
     ],
@@ -431,6 +479,15 @@ test("today records commands and summary cover vitals, meds, and symptoms", asyn
       filePath,
     );
     await addCareRecord(
+      createRecord("bloodOxygen", {
+        datetime: "2026-09-20T07:50",
+        value: 97,
+        pulse: 74,
+        recordedBy: "姐姐",
+      }),
+      filePath,
+    );
+    await addCareRecord(
       createRecord("medication", {
         datetime: "2026-09-20T07:10",
         drugName: "心律整錠",
@@ -456,10 +513,11 @@ test("today records commands and summary cover vitals, meds, and symptoms", asyn
       await getCareLog(filePath),
       new Date("2026-09-20T12:00:00+08:00"),
     );
-    assert.match(summary, /今日紀錄共 5 筆/);
+    assert.match(summary, /今日紀錄共 6 筆/);
     assert.match(summary, /體溫 36\.8°C/);
     assert.match(summary, /血壓 124\/78/);
     assert.match(summary, /血糖 104 飯前/);
+    assert.match(summary, /血氧 97%/);
     assert.match(summary, /吃藥 心律整錠 已吃/);
     assert.match(summary, /症狀 今日無異狀/);
 
@@ -480,7 +538,7 @@ test("today records commands and summary cover vitals, meds, and symptoms", asyn
     assert.equal(flex.type, "flex");
     assert.equal(flex.contents.type, "bubble");
     const texts = collectFlexTexts(flex);
-    assert.match(flex.altText, /今日紀錄共 6 筆/);
+    assert.match(flex.altText, /今日紀錄共 7 筆/);
     assert.equal(texts.includes("今日紀錄"), true);
     assert.equal(texts.some((text) => text.includes("體溫") && texts.some((item) => item.includes("36.8"))), true);
     assert.equal(texts.some((text) => /36\.8°C/.test(text) || text.includes("36.8")), true);
@@ -488,6 +546,7 @@ test("today records commands and summary cover vitals, meds, and symptoms", asyn
     assert.equal(texts.some((text) => text.includes("124/78")), true);
     assert.equal(texts.some((text) => text.includes("血糖") && texts.some((item) => item.includes("104"))), true);
     assert.equal(texts.some((text) => text.includes("104") && text.includes("飯前")), true);
+    assert.equal(texts.some((text) => text.includes("血氧") && texts.some((item) => item.includes("97"))), true);
     assert.equal(texts.some((text) => text.includes("心律整錠")), true);
     assert.equal(texts.some((text) => text.includes("今日無異狀")), true);
     assert.equal(texts.some((text) => text.includes("62.3") && text.includes("kg")), true);
