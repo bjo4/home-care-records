@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { bootstrapUsersIfEmpty } from "../lib/auth";
-import { createRecord } from "../lib/care-records";
+import { createRecord, type VisitRecord } from "../lib/care-records";
 import { addCareRecord, emptyCareLogData, getCareLog, saveCareLog } from "../lib/care-store";
 import {
   bindLineUser,
@@ -14,6 +14,8 @@ import {
   buildDueRemindersFlexMessage,
   buildMenuFlexMessage,
   buildTodayRecordsFlexMessage,
+  buildVisitDetailFlexMessage,
+  buildVisitRecordsFlexMessage,
   createCareRecordFromLineText,
   createLineBindCode,
   findLineBinding,
@@ -23,6 +25,7 @@ import {
   isAgendaCommand,
   isLineMenuCommand,
   isTodayRecordsCommand,
+  isVisitRecordsCommand,
   setPendingLineInput,
   unbindLineConversation,
   verifyLineSignature,
@@ -272,11 +275,11 @@ test("leave unbinds a group conversation without removing 1:1 binding", async ()
   }
 });
 
-test("menu flex uses emoji labels and includes 未來行程 under 查看", () => {
+test("menu flex uses emoji labels and includes 未來行程與看診紀錄 under 查看", () => {
   const menu = buildMenuFlexMessage();
   assert.equal(menu.type, "flex");
   assert.match(menu.altText, /CareLog/);
-  assert.match(menu.altText, /快速記錄|今日紀錄|未來行程|選單/);
+  assert.match(menu.altText, /快速記錄|今日紀錄|未來行程|看診紀錄|選單/);
 
   const texts = collectFlexTexts(menu);
   assert.equal(texts.some((text) => text.includes("快速記錄")), true);
@@ -305,6 +308,10 @@ test("menu flex uses emoji labels and includes 未來行程 under 查看", () =>
   const agendaButtons = buttons.filter((button) => button.data === "action=agenda");
   assert.equal(agendaButtons.length, 1);
   assert.equal(agendaButtons[0]?.label, "📅 未來行程");
+
+  const visitButtons = buttons.filter((button) => button.data === "action=visits");
+  assert.equal(visitButtons.length, 1);
+  assert.equal(visitButtons[0]?.label, "🏥 看診紀錄");
   assert.equal(buttons.some((button) => button.label === "顯示紀錄"), false);
   assert.equal(collectFlexSeparators(menu) >= 1, true);
 });
@@ -315,6 +322,17 @@ test("agenda commands accept 未來行程 aliases", () => {
   assert.equal(isAgendaCommand("行程表"), true);
   assert.equal(isAgendaCommand("今日紀錄"), false);
   assert.equal(isAgendaCommand("選單"), false);
+});
+
+test("visit commands accept 看診 and 看診紀錄", () => {
+  assert.equal(isVisitRecordsCommand("看診"), true);
+  assert.equal(isVisitRecordsCommand("看診紀錄"), true);
+  assert.equal(isVisitRecordsCommand(" 看診紀錄 "), true);
+  assert.equal(isVisitRecordsCommand("今日紀錄"), false);
+  assert.equal(isVisitRecordsCommand("未來行程"), false);
+  assert.equal(isVisitRecordsCommand("選單"), false);
+  assert.equal(isTodayRecordsCommand("看診"), false);
+  assert.equal(isAgendaCommand("看診紀錄"), false);
 });
 
 test("agenda flex empty state says 近期沒有行程", () => {
@@ -434,6 +452,155 @@ test("agenda flex uses a carousel when there are many items", () => {
     (flex.contents.contents as { type: string }[]).every((item) => item.type === "bubble"),
     true,
   );
+});
+
+test("visit list flex empty state is friendly", () => {
+  const flex = buildVisitRecordsFlexMessage(emptyCareLogData());
+  assert.equal(flex.type, "flex");
+  assert.equal(flex.contents.type, "bubble");
+  assert.match(flex.altText, /看診/);
+  const texts = collectFlexTexts(flex);
+  assert.equal(texts.some((text) => text.includes("看診紀錄")), true);
+  assert.equal(texts.some((text) => /尚無|目前沒有/.test(text)), true);
+});
+
+test("visit list flex shows past and future visits newest first", () => {
+  const data = {
+    ...emptyCareLogData(),
+    visits: [
+      sampleVisit({
+        id: "v-old",
+        department: "家醫科",
+        date: "2026-08-01",
+        doctor: "陳醫師",
+        instructions: "舊的回診",
+      }),
+      sampleVisit({
+        id: "v-future",
+        department: "心臟內科",
+        date: "2026-10-05",
+        doctor: "林醫師",
+        instructions: "追蹤心律",
+        followUpDate: "2026-11-01",
+      }),
+      sampleVisit({
+        id: "v-recent",
+        department: "神經內科",
+        date: "2026-09-18",
+        instructions: "調整用藥",
+      }),
+    ],
+  };
+
+  const flex = buildVisitRecordsFlexMessage(data);
+  assert.equal(flex.type, "flex");
+  assert.equal(flex.contents.type, "bubble");
+  assert.match(flex.altText, /看診紀錄共 3 筆/);
+
+  const texts = collectFlexTexts(flex);
+  assert.equal(texts.some((text) => text.includes("看診紀錄")), true);
+  assert.equal(texts.some((text) => text.includes("心臟內科")), true);
+  assert.equal(texts.some((text) => text.includes("神經內科")), true);
+  assert.equal(texts.some((text) => text.includes("家醫科")), true);
+  assert.equal(texts.some((text) => text.includes("林醫師") || text.includes("追蹤心律")), true);
+
+  const joined = texts.join("\n");
+  const futureAt = joined.indexOf("心臟內科");
+  const recentAt = joined.indexOf("神經內科");
+  const oldAt = joined.indexOf("家醫科");
+  assert.equal(futureAt >= 0 && recentAt > futureAt && oldAt > recentAt, true);
+
+  const rowActions = collectFlexPostbacks(flex).filter((item) => item.data.includes("action=visit"));
+  assert.deepEqual(
+    rowActions.map((item) => new URLSearchParams(item.data).get("id")),
+    ["v-future", "v-recent", "v-old"],
+  );
+  assert.equal(rowActions.every((item) => new URLSearchParams(item.data).get("page") === "1"), true);
+});
+
+test("visit list flex paginates 8 items with prev and next postbacks", () => {
+  const visits = Array.from({ length: 10 }, (_, index) =>
+    sampleVisit({
+      id: `v${index}`,
+      department: `第${index + 1}科`,
+      date: `2026-09-${String(21 - index).padStart(2, "0")}`,
+      instructions: `摘要 ${index + 1}`,
+    }),
+  );
+  const data = { ...emptyCareLogData(), visits };
+
+  const page1 = buildVisitRecordsFlexMessage(data, 1);
+  const page1Texts = collectFlexTexts(page1);
+  assert.equal(page1Texts.some((text) => text.includes("第1科")), true);
+  assert.equal(page1Texts.some((text) => text.includes("第8科")), true);
+  assert.equal(page1Texts.some((text) => text.includes("第9科")), false);
+  assert.match(page1Texts.join("\n"), /1\/2|看診紀錄（1\/2）/);
+
+  const page1Buttons = collectFlexButtons(page1);
+  assert.equal(page1Buttons.some((button) => button.label.includes("上一頁")), false);
+  const next = page1Buttons.find((button) => button.label.includes("下一頁"));
+  assert.equal(next?.data, "action=visits&page=2");
+
+  const page2 = buildVisitRecordsFlexMessage(data, 2);
+  const page2Texts = collectFlexTexts(page2);
+  assert.equal(page2Texts.some((text) => text.includes("第9科")), true);
+  assert.equal(page2Texts.some((text) => text.includes("第10科")), true);
+  assert.equal(page2Texts.some((text) => text.includes("第1科")), false);
+  const prev = collectFlexButtons(page2).find((button) => button.label.includes("上一頁"));
+  assert.equal(prev?.data, "action=visits&page=1");
+  assert.equal(
+    collectFlexButtons(page2).some((button) => button.label.includes("下一頁")),
+    false,
+  );
+
+  const overflow = buildVisitRecordsFlexMessage(data, 99);
+  assert.equal(collectFlexTexts(overflow).some((text) => text.includes("第9科")), true);
+});
+
+test("visit detail flex mirrors stored fields and omits empty ones", () => {
+  const full = sampleVisit({
+    id: "v-full",
+    department: "心臟內科",
+    date: "2026-09-18",
+    doctor: "林醫師",
+    instructions: "持續追蹤心律，必要時調整藥量。",
+    followUpDate: "2026-10-02",
+    recordedBy: "姐姐",
+    lastEditedBy: "Warren",
+    lastEditedAt: "2026-09-19T10:00:00.000Z",
+  });
+  const flex = buildVisitDetailFlexMessage(full, 2);
+  assert.equal(flex.type, "flex");
+  assert.equal(flex.contents.type, "bubble");
+  assert.match(flex.altText, /心臟內科|看診/);
+
+  const texts = collectFlexTexts(flex);
+  assert.equal(texts.some((text) => text.includes("心臟內科")), true);
+  assert.equal(texts.some((text) => text.includes("林醫師")), true);
+  assert.equal(texts.some((text) => text.includes("持續追蹤心律")), true);
+  assert.equal(texts.some((text) => text.includes("2026") || text.includes("09") || text.includes("18")), true);
+  assert.equal(texts.some((text) => text.includes("10") && (text.includes("02") || text.includes("2"))), true);
+  assert.equal(texts.some((text) => text.includes("姐姐")), true);
+  assert.equal(texts.some((text) => text.includes("Warren")), true);
+  assert.equal(texts.some((text) => text.includes("undefined")), false);
+
+  const back = collectFlexButtons(flex).find((button) => button.data.includes("action=visits"));
+  assert.equal(back?.data, "action=visits&page=2");
+
+  const sparse = buildVisitDetailFlexMessage(
+    sampleVisit({
+      id: "v-sparse",
+      department: "家醫科",
+      date: "2026-08-01",
+      instructions: "追蹤血壓",
+    }),
+  );
+  const sparseTexts = collectFlexTexts(sparse);
+  assert.equal(sparseTexts.some((text) => text.includes("家醫科")), true);
+  assert.equal(sparseTexts.some((text) => text.includes("追蹤血壓")), true);
+  assert.equal(sparseTexts.some((text) => text.includes("醫師") && sparseTexts.some((item) => item.includes("林"))), false);
+  assert.equal(sparseTexts.includes("undefined"), false);
+  assert.equal(sparseTexts.includes(""), false);
 });
 
 test("today records commands and summary cover vitals, meds, and symptoms", async () => {
@@ -648,6 +815,36 @@ test("due reminder flex uses a carousel when there are many items", () => {
   assert.equal(flex?.contents.type, "carousel");
   assert.equal((flex?.contents.contents as unknown[]).length > 1, true);
 });
+
+function sampleVisit(visit: Partial<VisitRecord> & Pick<VisitRecord, "id" | "department" | "date" | "instructions">) {
+  return {
+    recordedBy: "Warren",
+    createdAt: "2026-09-20T08:00:00.000Z",
+    ...visit,
+  };
+}
+
+function collectFlexPostbacks(node: unknown): { label?: string; data: string }[] {
+  if (!node || typeof node !== "object") return [];
+  const value = node as Record<string, unknown>;
+  const actions: { label?: string; data: string }[] = [];
+  const action = value.action;
+  if (
+    action &&
+    typeof action === "object" &&
+    (action as { type?: unknown }).type === "postback" &&
+    typeof (action as { data?: unknown }).data === "string"
+  ) {
+    actions.push({
+      label: typeof (action as { label?: unknown }).label === "string"
+        ? (action as { label: string }).label
+        : undefined,
+      data: (action as { data: string }).data,
+    });
+  }
+  for (const child of walkFlexChildren(value)) actions.push(...collectFlexPostbacks(child));
+  return actions;
+}
 
 function collectFlexTexts(node: unknown): string[] {
   if (!node || typeof node !== "object") return [];

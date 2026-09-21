@@ -8,7 +8,7 @@ import { NextRequest } from "next/server";
 
 import { POST } from "../app/api/line/webhook/route";
 import { bootstrapUsersIfEmpty } from "../lib/auth";
-import { getCareLog } from "../lib/care-store";
+import { getCareLog, saveCareLog } from "../lib/care-store";
 import { bindLineUser, createLineBindCode, setPendingLineInput } from "../lib/line";
 
 type LineReplyCall = {
@@ -150,6 +150,76 @@ test("line webhook stays quiet except for commands, bind codes, and pending inpu
       );
     });
 
+    await t.test("visit text commands reply with the list flex", async () => {
+      replies.length = 0;
+      const current = await getCareLog(filePath);
+      await saveCareLog(
+        {
+          ...current,
+          visits: [
+            {
+              id: "v-line",
+              department: "心臟內科",
+              date: "2026-09-18",
+              doctor: "林醫師",
+              instructions: "持續追蹤心律",
+              recordedBy: "Warren",
+              createdAt: "2026-09-18T08:00:00.000Z",
+            },
+          ],
+        },
+        filePath,
+      );
+
+      for (const [replyToken, text] of [
+        ["r-visits-text", "看診紀錄"],
+        ["r-visits-alias", "看診"],
+      ] as const) {
+        replies.length = 0;
+        const response = await postWebhook(secret, [
+          textEvent(replyToken, {
+            type: "group",
+            groupId: "Cfamily-group",
+            userId: "Usender",
+          }, text),
+        ]);
+        assert.equal(response.status, 200);
+        const messages = lineReplies(replies);
+        assert.equal(messages.length, 1);
+        assert.equal(messages[0]?.body.messages?.[0]?.type, "flex");
+        assert.match(messages[0]?.body.messages?.[0]?.altText ?? "", /看診/);
+      }
+    });
+
+    await t.test("visit list and detail postbacks reply in group and 1:1", async () => {
+      replies.length = 0;
+      const listResponse = await postWebhook(secret, [
+        postbackEvent("r-visits-list", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "action=visits&page=1"),
+      ]);
+      assert.equal(listResponse.status, 200);
+      const listMessages = lineReplies(replies);
+      assert.equal(listMessages.length, 1);
+      assert.equal(listMessages[0]?.body.messages?.[0]?.type, "flex");
+      assert.match(listMessages[0]?.body.messages?.[0]?.altText ?? "", /看診/);
+
+      replies.length = 0;
+      const detailResponse = await postWebhook(secret, [
+        postbackEvent("r-visit-detail", {
+          type: "user",
+          userId: "Uone",
+        }, "action=visit&id=v-line&page=1"),
+      ]);
+      assert.equal(detailResponse.status, 200);
+      const detailMessages = lineReplies(replies);
+      assert.equal(detailMessages.length, 1);
+      assert.equal(detailMessages[0]?.body.messages?.[0]?.type, "flex");
+      assert.match(detailMessages[0]?.body.messages?.[0]?.altText ?? "", /心臟內科|看診/);
+    });
+
     await t.test("join welcome still replies once", async () => {
       replies.length = 0;
       const response = await postWebhook(secret, [
@@ -191,6 +261,19 @@ function textEvent(
     replyToken,
     source,
     message: { type: "text", text },
+  };
+}
+
+function postbackEvent(
+  replyToken: string,
+  source: { type: string; userId?: string; groupId?: string; roomId?: string },
+  data: string,
+) {
+  return {
+    type: "postback",
+    replyToken,
+    source,
+    postback: { data },
   };
 }
 

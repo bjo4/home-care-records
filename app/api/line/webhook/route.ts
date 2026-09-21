@@ -7,12 +7,15 @@ import {
   buildAgendaFlexMessage,
   buildMenuFlexMessage,
   buildTodayRecordsFlexMessage,
+  buildVisitDetailFlexMessage,
+  buildVisitRecordsFlexMessage,
   createCareRecordFromLineText,
   findLineBinding,
   getLineConversation,
   isAgendaCommand,
   isLineMenuCommand,
   isTodayRecordsCommand,
+  isVisitRecordsCommand,
   setPendingLineInput,
   unbindLineConversation,
   verifyLineSignature,
@@ -69,6 +72,9 @@ async function handleEvent(event: LineEvent) {
     if (isAgendaCommand(text)) {
       return replyAgenda(event.replyToken, conversationId, senderUserId);
     }
+    if (isVisitRecordsCommand(text)) {
+      return replyVisitRecords(event.replyToken, conversationId, senderUserId);
+    }
     if (/^CL-[0-9A-F]{6}$/i.test(text)) {
       const binding = await bindLineUser(conversationId, text, sourceType);
       if (!binding) {
@@ -95,6 +101,18 @@ async function handleEvent(event: LineEvent) {
     }
     if (action === "agenda" || action === "schedule") {
       return replyAgenda(event.replyToken, conversationId, senderUserId);
+    }
+    if (action === "visits") {
+      return replyVisitRecords(event.replyToken, conversationId, senderUserId, parsePage(data.get("page")));
+    }
+    if (action === "visit") {
+      return replyVisitDetail(
+        event.replyToken,
+        conversationId,
+        senderUserId,
+        data.get("id"),
+        parsePage(data.get("page")),
+      );
     }
     const kind = data.get("type") as
       | "temperature"
@@ -158,6 +176,44 @@ async function replyAgenda(
     return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
   }
   return reply(replyToken, [buildAgendaFlexMessage(careData)]);
+}
+
+async function replyVisitRecords(
+  replyToken: string,
+  conversationId: string,
+  senderUserId?: string,
+  page = 1,
+) {
+  const careData = await getCareLog();
+  const binding = findLineBinding(careData, conversationId, senderUserId);
+  if (!binding) {
+    return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
+  }
+  return reply(replyToken, [buildVisitRecordsFlexMessage(careData, page)]);
+}
+
+async function replyVisitDetail(
+  replyToken: string,
+  conversationId: string,
+  senderUserId?: string,
+  visitId?: string | null,
+  page = 1,
+) {
+  const careData = await getCareLog();
+  const binding = findLineBinding(careData, conversationId, senderUserId);
+  if (!binding) {
+    return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
+  }
+  const visit = careData.visits.find((item) => item.id === visitId);
+  if (!visit) {
+    return replyText(replyToken, "找不到這筆看診紀錄。可用選單再開一次看診紀錄。");
+  }
+  return reply(replyToken, [buildVisitDetailFlexMessage(visit, page)]);
+}
+
+function parsePage(value: string | null) {
+  const page = Number(value ?? "1");
+  return Number.isInteger(page) && page > 0 ? page : 1;
 }
 
 function promptFor(kind: string) {

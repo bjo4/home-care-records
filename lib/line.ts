@@ -106,6 +106,10 @@ export function isAgendaCommand(text: string) {
   return ["未來行程", "行程", "行程表"].includes(text.trim());
 }
 
+export function isVisitRecordsCommand(text: string) {
+  return ["看診", "看診紀錄"].includes(text.trim());
+}
+
 export async function createLineBindCode(userId: string, displayName: string) {
   const data = await getCareLog();
   const code = `CL-${randomBytes(3).toString("hex").toUpperCase()}`;
@@ -271,7 +275,7 @@ export function formatTodayRecordsSummary(data: CareLogData, today = new Date())
 export function buildMenuFlexMessage(): LineFlexMessage {
   return {
     type: "flex",
-    altText: "CareLog 選單：快速記錄、今日紀錄與未來行程",
+    altText: "CareLog 選單：快速記錄、今日紀錄、未來行程與看診紀錄",
     contents: flexBubble([
       flexTitle("CareLog"),
       flexMuted("選擇要記錄或查看的項目"),
@@ -286,6 +290,7 @@ export function buildMenuFlexMessage(): LineFlexMessage {
       flexSection("🔎 查看", [
         menuButton("📋 今日紀錄", "primary", "action=records"),
         menuButton("📅 未來行程", "secondary", "action=agenda"),
+        menuButton("🏥 看診紀錄", "secondary", "action=visits"),
       ]),
     ]),
   };
@@ -409,6 +414,76 @@ export function buildAgendaFlexMessage(data: CareLogData, now = new Date()): Lin
     type: "flex",
     altText: truncateAlt(formatAgendaSummary(data, now)),
     contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
+  };
+}
+
+const VISIT_LIST_PAGE_SIZE = FLEX_ITEMS_PER_BUBBLE;
+
+export function getVisitRecordsSorted(data: CareLogData): VisitRecord[] {
+  return [...data.visits].sort((a, b) => {
+    const byTime = visitTimestamp(b.date) - visitTimestamp(a.date);
+    return byTime !== 0 ? byTime : b.createdAt.localeCompare(a.createdAt);
+  });
+}
+
+export function buildVisitRecordsFlexMessage(data: CareLogData, page = 1): LineFlexMessage {
+  const visits = getVisitRecordsSorted(data);
+  if (visits.length === 0) {
+    return {
+      type: "flex",
+      altText: "尚無看診紀錄",
+      contents: flexBubble([
+        flexTitle("看診紀錄"),
+        flexMuted("目前沒有看診紀錄"),
+        flexMuted("可到 CareLog 新增看診，或用選單查看今日紀錄與未來行程。"),
+      ]),
+    };
+  }
+
+  const totalPages = Math.max(1, Math.ceil(visits.length / VISIT_LIST_PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, Number.isInteger(page) ? page : 1), totalPages);
+  const start = (currentPage - 1) * VISIT_LIST_PAGE_SIZE;
+  const pageItems = visits.slice(start, start + VISIT_LIST_PAGE_SIZE);
+  const rows = pageItems.flatMap((visit, rowIndex) => [
+    ...(rowIndex === 0 ? [] : [flexSeparator()]),
+    visitListFlexRow(visit, currentPage),
+  ]);
+
+  return {
+    type: "flex",
+    altText: truncateAlt(`看診紀錄共 ${visits.length} 筆`),
+    contents: flexBubble([
+      flexTitle(totalPages > 1 ? `看診紀錄（${currentPage}/${totalPages}）` : "看診紀錄"),
+      flexMuted(`共 ${visits.length} 筆`),
+      ...rows,
+      ...visitPaginationButtons(currentPage, totalPages),
+    ]),
+  };
+}
+
+export function buildVisitDetailFlexMessage(visit: VisitRecord, page = 1): LineFlexMessage {
+  const fields = visitDetailFields(visit);
+  const rows = fields.flatMap((field, index) => [
+    ...(index === 0 ? [] : [flexSeparator()]),
+    {
+      type: "box",
+      layout: "vertical",
+      spacing: "xs",
+      contents: [
+        { type: "text", text: field.label, size: "xs", color: "#0F766E", weight: "bold" },
+        { type: "text", text: field.value, size: "sm", wrap: true },
+      ],
+    },
+  ]);
+
+  return {
+    type: "flex",
+    altText: truncateAlt(`看診｜${visit.department}${visit.doctor ? `｜${visit.doctor}` : ""}`),
+    contents: flexBubble([
+      flexTitle("看診詳情"),
+      ...rows,
+      menuButton("返回列表", "secondary", `action=visits&page=${Math.max(1, page)}`),
+    ]),
   };
 }
 
@@ -564,6 +639,122 @@ function visitAgendaItem(visit: VisitRecord, start: number, end: number): Upcomi
 
 function visitTitle(visit: VisitRecord) {
   return visit.doctor ? `${visit.department}｜${visit.doctor}` : visit.department;
+}
+
+function visitTimestamp(value: string) {
+  return agendaTimestamp(value);
+}
+
+function visitListFlexRow(visit: VisitRecord, page: number) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    action: {
+      type: "postback",
+      data: `action=visit&id=${encodeURIComponent(visit.id)}&page=${page}`,
+    },
+    contents: [
+      {
+        type: "box",
+        layout: "baseline",
+        spacing: "sm",
+        contents: [
+          {
+            type: "text",
+            text: formatVisitDate(visit.date),
+            size: "sm",
+            color: "#0F766E",
+            weight: "bold",
+            flex: 3,
+          },
+          {
+            type: "text",
+            text: visit.department,
+            size: "sm",
+            weight: "bold",
+            flex: 4,
+            wrap: true,
+          },
+        ],
+      },
+      {
+        type: "text",
+        text: visitListSummary(visit),
+        size: "xs",
+        color: "#888888",
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function visitListSummary(visit: VisitRecord) {
+  const notes = truncateText(visit.instructions.trim(), 40);
+  if (visit.doctor?.trim() && notes) return `${visit.doctor.trim()}｜${notes}`;
+  return visit.doctor?.trim() || notes || visit.department;
+}
+
+function visitPaginationButtons(currentPage: number, totalPages: number) {
+  if (totalPages <= 1) return [];
+  const buttons = [];
+  if (currentPage > 1) {
+    buttons.push(menuButton("上一頁", "secondary", `action=visits&page=${currentPage - 1}`));
+  }
+  if (currentPage < totalPages) {
+    buttons.push(menuButton("下一頁", "secondary", `action=visits&page=${currentPage + 1}`));
+  }
+  return [
+    flexSeparator(),
+    {
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      contents: buttons,
+    },
+  ];
+}
+
+function visitDetailFields(visit: VisitRecord) {
+  const fields: { label: string; value: string }[] = [
+    { label: "日期", value: formatVisitDate(visit.date) },
+    { label: "科別", value: visit.department.trim() },
+    { label: "醫師", value: visit.doctor?.trim() ?? "" },
+    { label: "醫囑/重點", value: visit.instructions.trim() },
+    { label: "下次回診", value: visit.followUpDate ? formatVisitDate(visit.followUpDate) : "" },
+    { label: "記錄者", value: visit.recordedBy.trim() },
+    {
+      label: "最後編輯",
+      value: visit.lastEditedBy?.trim()
+        ? visit.lastEditedAt
+          ? `${visit.lastEditedBy.trim()}｜${formatVisitDate(visit.lastEditedAt)}`
+          : visit.lastEditedBy.trim()
+        : "",
+    },
+  ];
+  return fields.filter((field) => field.value);
+}
+
+function formatVisitDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Intl.DateTimeFormat("zh-TW", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(`${value}T00:00:00`));
+  }
+  return new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
+function truncateText(value: string, max: number) {
+  return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
 
 function inAgendaWindow(value: string, start: number, end: number) {
