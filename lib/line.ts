@@ -670,7 +670,7 @@ function visitListFlexRow(visit: VisitRecord, page: number) {
           },
           {
             type: "text",
-            text: visit.department,
+            text: visit.department.trim() || "未填科別",
             size: "sm",
             weight: "bold",
             flex: 4,

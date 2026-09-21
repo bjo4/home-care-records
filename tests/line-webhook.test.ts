@@ -193,6 +193,23 @@ test("line webhook stays quiet except for commands, bind codes, and pending inpu
 
     await t.test("visit list and detail postbacks reply in group and 1:1", async () => {
       replies.length = 0;
+      const current = await getCareLog(filePath);
+      await saveCareLog(
+        {
+          ...current,
+          visits: Array.from({ length: 10 }, (_, index) => ({
+            id: index === 0 ? "v-line" : `v-page-${index}`,
+            department: index === 0 ? "心臟內科" : `第${index + 1}科`,
+            date: `2026-09-${String(21 - index).padStart(2, "0")}`,
+            doctor: index === 0 ? "林醫師" : undefined,
+            instructions: index === 0 ? "持續追蹤心律" : `摘要 ${index + 1}`,
+            recordedBy: "Warren",
+            createdAt: "2026-09-18T08:00:00.000Z",
+          })),
+        },
+        filePath,
+      );
+
       const listResponse = await postWebhook(secret, [
         postbackEvent("r-visits-list", {
           type: "group",
@@ -204,7 +221,20 @@ test("line webhook stays quiet except for commands, bind codes, and pending inpu
       const listMessages = lineReplies(replies);
       assert.equal(listMessages.length, 1);
       assert.equal(listMessages[0]?.body.messages?.[0]?.type, "flex");
-      assert.match(listMessages[0]?.body.messages?.[0]?.altText ?? "", /看診/);
+      assert.match(listMessages[0]?.body.messages?.[0]?.altText ?? "", /看診紀錄共 10 筆/);
+
+      replies.length = 0;
+      const page2Response = await postWebhook(secret, [
+        postbackEvent("r-visits-page-2", {
+          type: "user",
+          userId: "Uone",
+        }, "action=visits&page=2"),
+      ]);
+      assert.equal(page2Response.status, 200);
+      const page2Messages = lineReplies(replies);
+      assert.equal(page2Messages.length, 1);
+      assert.equal(page2Messages[0]?.body.messages?.[0]?.type, "flex");
+      assert.match(page2Messages[0]?.body.messages?.[0]?.altText ?? "", /看診紀錄共 10 筆/);
 
       replies.length = 0;
       const detailResponse = await postWebhook(secret, [
@@ -218,6 +248,55 @@ test("line webhook stays quiet except for commands, bind codes, and pending inpu
       assert.equal(detailMessages.length, 1);
       assert.equal(detailMessages[0]?.body.messages?.[0]?.type, "flex");
       assert.match(detailMessages[0]?.body.messages?.[0]?.altText ?? "", /心臟內科|看診/);
+
+      replies.length = 0;
+      const groupDetail = await postWebhook(secret, [
+        postbackEvent("r-visit-detail-group", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "action=visit&id=v-line&page=2"),
+      ]);
+      assert.equal(groupDetail.status, 200);
+      assert.equal(lineReplies(replies)[0]?.body.messages?.[0]?.type, "flex");
+
+      replies.length = 0;
+      const missing = await postWebhook(secret, [
+        postbackEvent("r-visit-missing", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "action=visit&id=missing&page=1"),
+      ]);
+      assert.equal(missing.status, 200);
+      assert.match(lineReplies(replies)[0]?.body.messages?.[0]?.text ?? "", /找不到這筆看診紀錄/);
+    });
+
+    await t.test("unbound visit command asks for bind code and empty list stays a flex card", async () => {
+      replies.length = 0;
+      const unbound = await postWebhook(secret, [
+        textEvent("r-visits-unbound", { type: "user", userId: "Ustranger" }, "看診"),
+      ]);
+      assert.equal(unbound.status, 200);
+      assert.match(
+        lineReplies(replies)[0]?.body.messages?.[0]?.text ?? "",
+        /綁定碼/,
+      );
+
+      replies.length = 0;
+      const current = await getCareLog(filePath);
+      await saveCareLog({ ...current, visits: [] }, filePath);
+      const empty = await postWebhook(secret, [
+        textEvent("r-visits-empty", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "看診紀錄"),
+      ]);
+      assert.equal(empty.status, 200);
+      const emptyMessage = lineReplies(replies)[0]?.body.messages?.[0];
+      assert.equal(emptyMessage?.type, "flex");
+      assert.match(emptyMessage?.altText ?? "", /看診/);
     });
 
     await t.test("join welcome still replies once", async () => {

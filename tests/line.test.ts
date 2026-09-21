@@ -510,7 +510,9 @@ test("visit list flex shows past and future visits newest first", () => {
   const oldAt = joined.indexOf("家醫科");
   assert.equal(futureAt >= 0 && recentAt > futureAt && oldAt > recentAt, true);
 
-  const rowActions = collectFlexPostbacks(flex).filter((item) => item.data.includes("action=visit"));
+  const rowActions = collectFlexPostbacks(flex).filter(
+    (item) => new URLSearchParams(item.data).get("action") === "visit",
+  );
   assert.deepEqual(
     rowActions.map((item) => new URLSearchParams(item.data).get("id")),
     ["v-future", "v-recent", "v-old"],
