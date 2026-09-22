@@ -11,6 +11,7 @@ import {
   buildVisitDetailFlexMessage,
   buildVisitRecordsFlexMessage,
   completeMedicationReminderFromLine,
+  clearPendingLineInput,
   createCareRecordFromLineText,
   findLineBinding,
   getLineConversation,
@@ -19,6 +20,7 @@ import {
   isTodayMedicationCommand,
   isTodayRecordsCommand,
   isVisitRecordsCommand,
+  promptForLineInput,
   setPendingLineInput,
   unbindLineConversation,
   verifyLineSignature,
@@ -68,7 +70,10 @@ async function handleEvent(event: LineEvent) {
 
   if (event.type === "message" && event.message?.type === "text") {
     const text = (event.message.text ?? "").trim();
-    if (isLineMenuCommand(text)) return reply(event.replyToken, [buildMenuFlexMessage()]);
+    if (isLineMenuCommand(text)) {
+      await clearPendingLineInput(conversationId);
+      return reply(event.replyToken, [buildMenuFlexMessage()]);
+    }
     if (isTodayRecordsCommand(text)) {
       return replyTodayRecords(event.replyToken, conversationId, senderUserId);
     }
@@ -95,7 +100,8 @@ async function handleEvent(event: LineEvent) {
       return replyText(event.replyToken, `已綁定 ${target}。輸入「選單」開始記錄，或輸入「今日紀錄」查看摘要。`);
     }
     const result = await createCareRecordFromLineText(conversationId, text, senderUserId);
-    if (result.silent) return;
+    if ("silent" in result && result.silent) return;
+    if ("menu" in result && result.menu) return reply(event.replyToken, [buildMenuFlexMessage()]);
     return replyText(event.replyToken, result.message);
   }
 
@@ -164,7 +170,7 @@ async function handleEvent(event: LineEvent) {
         return replyText(event.replyToken, "已記錄今日無異狀。");
       }
       await setPendingLineInput(conversationId, kind);
-      return replyText(event.replyToken, promptFor(kind));
+      return replyText(event.replyToken, promptForLineInput(kind));
     }
   }
 }
@@ -272,17 +278,6 @@ async function replyCompleteMedication(
 function parsePage(value: string | null) {
   const page = Number(value ?? "1");
   return Number.isInteger(page) && page > 0 ? page : 1;
-}
-
-function promptFor(kind: string) {
-  const prompts: Record<string, string> = {
-    temperature: "請輸入體溫，例如：36.8",
-    bloodPressure: "請輸入血壓，例如：120/80 72（脈搏可省略）",
-    bloodGlucose: "請輸入血糖，例如：110 飯前",
-    bloodOxygen: "請輸入血氧，例如：98 或 98 72（脈搏可省略）",
-    medication: "請輸入藥名與是否已吃，例如：心律整錠 是",
-  };
-  return prompts[kind] ?? "請輸入數值。";
 }
 
 async function replyText(replyToken: string, text: string) {

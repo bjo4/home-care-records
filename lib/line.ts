@@ -8,6 +8,7 @@ import {
   type CareRecord,
   type CareReminder,
   type ExamRecord,
+  type GlucoseMealTiming,
   type LineBinding,
   type LinePendingInput,
   type LineSourceType,
@@ -217,13 +218,242 @@ export async function setPendingLineInput(conversationId: string, kind: LinePend
 }
 
 export async function consumePendingLineInput(conversationId: string) {
+  return clearPendingLineInput(conversationId);
+}
+
+export async function clearPendingLineInput(conversationId: string) {
   const data = await getCareLog();
   const pending = data.linePendingInputs.find((item) => item.lineUserId === conversationId) ?? null;
+  if (!pending) return null;
   await saveCareLog({
     ...data,
     linePendingInputs: data.linePendingInputs.filter((item) => item.lineUserId !== conversationId),
   });
   return pending;
+}
+
+export function isLineCancelCommand(text: string) {
+  return text.trim() === "取消";
+}
+
+const LINE_INPUT_PROMPTS: Record<LinePendingInput["kind"], string> = {
+  temperature: "請輸入體溫，例如：36.8",
+  bloodPressure: "請輸入血壓，例如：120/80 72（脈搏可省略）",
+  bloodGlucose: "請輸入血糖，例如：110 飯前",
+  bloodOxygen: "請輸入血氧，例如：98 或 98 72（脈搏可省略）",
+  medication: "請輸入藥名與是否已吃，例如：心律整錠 是",
+};
+
+export function promptForLineInput(kind: string) {
+  return LINE_INPUT_PROMPTS[kind as LinePendingInput["kind"]] ?? "請輸入數值。";
+}
+
+type ParsedLineMeasurement =
+  | { kind: "temperature"; value: number }
+  | { kind: "bloodPressure"; systolic: number; diastolic: number; pulse?: number }
+  | { kind: "bloodGlucose"; value: number; mealTiming: GlucoseMealTiming }
+  | { kind: "bloodOxygen"; value: number; pulse?: number }
+  | { kind: "medication"; drugName: string; taken: boolean };
+
+const NATURAL_LINE_PREFIXES: { kind: LinePendingInput["kind"]; pattern: RegExp }[] = [
+  { kind: "temperature", pattern: /^(?:量)?(?:體溫|体温|溫度|temperature|temp)\s*[:：]?\s*/i },
+  { kind: "bloodPressure", pattern: /^(?:量)?(?:血壓|血压|blood\s*pressure|bp)\s*[:：]?\s*/i },
+  { kind: "bloodGlucose", pattern: /^(?:量)?(?:血糖值|血糖|blood\s*sugar|glucose)\s*[:：]?\s*/i },
+  { kind: "bloodOxygen", pattern: /^(?:量)?(?:血氧濃度|血氧|spo2|oxygen)\s*[:：]?\s*/i },
+  { kind: "medication", pattern: /^(?:吃藥|服藥|用藥|medication|meds|med)\s*[:：]?\s*/i },
+];
+
+const GLUCOSE_MEAL_ALIASES: Record<string, GlucoseMealTiming> = {
+  飯前: "飯前",
+  飯後: "飯後",
+  空腹: "空腹",
+  "其他/未指定": "其他/未指定",
+  其他: "其他/未指定",
+  未指定: "其他/未指定",
+  餐前: "飯前",
+  餐後: "飯後",
+  before: "飯前",
+  after: "飯後",
+  fasting: "空腹",
+};
+
+function invalidLineInput(kind: LinePendingInput["kind"]) {
+  return { ok: false as const, message: `格式不正確，請重新輸入。${promptForLineInput(kind)}` };
+}
+
+function matchNaturalLineInput(text: string) {
+  const trimmed = text.trim();
+  for (const entry of NATURAL_LINE_PREFIXES) {
+    const match = trimmed.match(entry.pattern);
+    if (!match) continue;
+    return { kind: entry.kind, valueText: trimmed.slice(match[0].length).trim() };
+  }
+  return null;
+}
+
+function parseLineMeasurement(kind: LinePendingInput["kind"], text: string): ParsedLineMeasurement | null {
+  const natural = matchNaturalLineInput(text);
+  const valueText = natural?.kind === kind ? natural.valueText : text.trim();
+  switch (kind) {
+    case "temperature": {
+      const value = parseTemperatureValue(valueText);
+      return value === null ? null : { kind, value };
+    }
+    case "bloodPressure": {
+      const parsed = parseBloodPressureValue(valueText);
+      return parsed ? { kind, ...parsed } : null;
+    }
+    case "bloodGlucose": {
+      const parsed = parseBloodGlucoseValue(valueText);
+      return parsed ? { kind, ...parsed } : null;
+    }
+    case "bloodOxygen": {
+      const parsed = parseBloodOxygenValue(valueText);
+      return parsed ? { kind, ...parsed } : null;
+    }
+    case "medication": {
+      const parsed = parseMedicationValue(valueText);
+      return parsed ? { kind, ...parsed } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function parseTemperatureValue(text: string) {
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return null;
+  const value = Number(text);
+  return inClosedRange(value, 30, 45) ? value : null;
+}
+
+function parseBloodPressureValue(text: string) {
+  const match = text.match(/^(\d+(?:\.\d+)?)\s*[/／]\s*(\d+(?:\.\d+)?)(?:\s+(\d+))?$/);
+  if (!match) return null;
+  const systolic = Number(match[1]);
+  const diastolic = Number(match[2]);
+  if (!inClosedRange(systolic, 50, 260) || !inClosedRange(diastolic, 30, 160) || systolic <= diastolic) {
+    return null;
+  }
+  if (!match[3]) return { systolic, diastolic };
+  const pulse = Number(match[3]);
+  if (!Number.isInteger(pulse) || !inClosedRange(pulse, 30, 220)) return null;
+  return { systolic, diastolic, pulse };
+}
+
+function parseBloodGlucoseValue(text: string) {
+  const match = text.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  if (!inClosedRange(value, 20, 600)) return null;
+  const timingText = match[2].trim();
+  if (!timingText) return { value, mealTiming: "其他/未指定" as GlucoseMealTiming };
+  const mealTiming = GLUCOSE_MEAL_ALIASES[timingText] ?? GLUCOSE_MEAL_ALIASES[timingText.toLowerCase()];
+  return mealTiming ? { value, mealTiming } : null;
+}
+
+function parseBloodOxygenValue(text: string) {
+  let parsed: { value: number; pulse?: number };
+  try {
+    parsed = parseBloodOxygenInput(text);
+  } catch {
+    return null;
+  }
+  if (!inClosedRange(parsed.value, 70, 100)) return null;
+  if (parsed.pulse !== undefined && !inClosedRange(parsed.pulse, 30, 220)) return null;
+  return parsed;
+}
+
+function parseMedicationValue(text: string) {
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return null;
+  let taken = true;
+  const last = parts[parts.length - 1];
+  if (parts.length >= 2 && isTakenToken(last)) {
+    taken = isTakenYes(last);
+    parts.pop();
+  }
+  const drugName = parts.join(" ").trim();
+  if (!drugName || isTakenToken(drugName)) return null;
+  return { drugName, taken };
+}
+
+function isTakenToken(token: string) {
+  return /^(?:是|否|已吃|未吃|沒吃|yes|no|y|n)$/i.test(token);
+}
+
+function isTakenYes(token: string) {
+  return /^(?:是|已吃|yes|y)$/i.test(token);
+}
+
+function inClosedRange(value: number, min: number, max: number) {
+  return Number.isFinite(value) && value >= min && value <= max;
+}
+
+function buildLineCareRecord(parsed: ParsedLineMeasurement, recordedBy: string, notes: string) {
+  const datetime = toLocalInput(new Date());
+  switch (parsed.kind) {
+    case "temperature":
+      return createRecord("temperature", {
+        datetime,
+        value: parsed.value,
+        site: "耳",
+        recordedBy,
+        notes,
+      });
+    case "bloodPressure":
+      return createRecord("bloodPressure", {
+        datetime,
+        systolic: parsed.systolic,
+        diastolic: parsed.diastolic,
+        pulse: parsed.pulse,
+        posture: "坐",
+        recordedBy,
+        notes,
+      });
+    case "bloodGlucose":
+      return createRecord("bloodGlucose", {
+        datetime,
+        value: parsed.value,
+        mealTiming: parsed.mealTiming,
+        recordedBy,
+        notes,
+      });
+    case "bloodOxygen":
+      return createRecord("bloodOxygen", {
+        datetime,
+        value: parsed.value,
+        pulse: parsed.pulse,
+        recordedBy,
+        notes,
+      });
+    case "medication":
+      return createRecord("medication", {
+        datetime,
+        drugName: parsed.drugName,
+        taken: parsed.taken,
+        confirmedBy: recordedBy,
+        notes,
+      });
+  }
+}
+
+function summarizeLineMeasurement(parsed: ParsedLineMeasurement) {
+  switch (parsed.kind) {
+    case "temperature":
+      return `體溫 ${parsed.value.toFixed(1)}°C`;
+    case "bloodPressure":
+      return `血壓 ${formatPlainNumber(parsed.systolic)}/${formatPlainNumber(parsed.diastolic)}${parsed.pulse ? ` 脈搏${parsed.pulse}` : ""}`;
+    case "bloodGlucose":
+      return `血糖 ${formatPlainNumber(parsed.value)} ${parsed.mealTiming}`;
+    case "bloodOxygen":
+      return `血氧 ${formatSpo2(parsed.value)}%${parsed.pulse ? ` 脈搏${parsed.pulse}` : ""}`;
+    case "medication":
+      return `吃藥 ${parsed.drugName} ${parsed.taken ? "已吃" : "未吃"}`;
+  }
+}
+
+function formatPlainNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : String(value);
 }
 
 export function drugNameFromReminder(reminder: CareReminder, data: CareLogData) {
@@ -302,45 +532,53 @@ export async function completeMedicationReminderFromLine(
   return { status: "completed", drugName };
 }
 
+export type CreateCareRecordFromLineTextResult = {
+  ok: boolean;
+  message: string;
+  silent?: true;
+  menu?: true;
+};
+
 export async function createCareRecordFromLineText(
   conversationId: string,
   text: string,
   fallbackUserId?: string,
-) {
+): Promise<CreateCareRecordFromLineTextResult> {
   const data = await getCareLog();
   const binding = findLineBinding(data, conversationId, fallbackUserId);
   if (!binding) {
     return { ok: false as const, silent: true as const, message: "尚未綁定，請先輸入帳號頁的綁定碼。" };
   }
-  const pending = data.linePendingInputs.find((item) => item.lineUserId === conversationId);
-  if (!pending) {
-    return { ok: false as const, silent: true as const, message: "請先從選單選擇要記錄的項目。" };
-  }
-  const datetime = toLocalInput(new Date());
-  const notes = "LINE quick log";
 
-  try {
-    if (pending.kind === "temperature") {
-      await addCareRecord(createRecord("temperature", { datetime, value: Number(text), site: "耳", recordedBy: binding.displayName, notes }));
-    } else if (pending.kind === "bloodPressure") {
-      const [bp, pulseText] = text.trim().split(/\s+/);
-      const [systolic, diastolic] = bp.split("/").map(Number);
-      await addCareRecord(createRecord("bloodPressure", { datetime, systolic, diastolic, pulse: pulseText ? Number(pulseText) : undefined, posture: "坐", recordedBy: binding.displayName, notes }));
-    } else if (pending.kind === "bloodGlucose") {
-      const [valueText, timing = "其他/未指定"] = text.trim().split(/\s+/);
-      await addCareRecord(createRecord("bloodGlucose", { datetime, value: Number(valueText), mealTiming: timing as never, recordedBy: binding.displayName, notes }));
-    } else if (pending.kind === "bloodOxygen") {
-      const { value, pulse } = parseBloodOxygenInput(text);
-      await addCareRecord(createRecord("bloodOxygen", { datetime, value, pulse, recordedBy: binding.displayName, notes }));
-    } else if (pending.kind === "medication") {
-      const [drugName, takenText = "是"] = text.trim().split(/\s+/);
-      await addCareRecord(createRecord("medication", { datetime, drugName, taken: takenText !== "否", confirmedBy: binding.displayName, notes }));
+  const pending = data.linePendingInputs.find((item) => item.lineUserId === conversationId);
+  if (pending) {
+    if (isLineCancelCommand(text)) {
+      await clearPendingLineInput(conversationId);
+      return { ok: false as const, message: "已取消。" };
     }
+    if (isLineMenuCommand(text)) {
+      await clearPendingLineInput(conversationId);
+      return { ok: false as const, menu: true as const, message: "已取消。" };
+    }
+    const parsed = parseLineMeasurement(pending.kind, text);
+    if (!parsed) return invalidLineInput(pending.kind);
+    await addCareRecord(buildLineCareRecord(parsed, binding.displayName, "LINE quick log"));
     await consumePendingLineInput(conversationId);
     return { ok: true as const, message: "已新增紀錄。" };
-  } catch {
-    return { ok: false as const, message: "格式不正確，請重新輸入。" };
   }
+
+  if (isLineCancelCommand(text) || isLineMenuCommand(text)) {
+    return { ok: false as const, silent: true as const, message: "請先從選單選擇要記錄的項目。" };
+  }
+
+  const natural = matchNaturalLineInput(text);
+  if (!natural) {
+    return { ok: false as const, silent: true as const, message: "請先從選單選擇要記錄的項目。" };
+  }
+  const parsed = parseLineMeasurement(natural.kind, natural.valueText);
+  if (!parsed) return invalidLineInput(natural.kind);
+  await addCareRecord(buildLineCareRecord(parsed, binding.displayName, "LINE text log"));
+  return { ok: true as const, message: `已記錄${summarizeLineMeasurement(parsed)}。` };
 }
 
 export function formatTodayRecordsSummary(data: CareLogData, today = new Date()) {
