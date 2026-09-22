@@ -6,6 +6,7 @@ import {
   bindLineUser,
   buildAgendaFlexMessage,
   buildMenuFlexMessage,
+  buildTodayMedicationFlexMessage,
   buildTodayRecordsFlexMessage,
   buildVisitDetailFlexMessage,
   buildVisitRecordsFlexMessage,
@@ -15,6 +16,7 @@ import {
   getLineConversation,
   isAgendaCommand,
   isLineMenuCommand,
+  isTodayMedicationCommand,
   isTodayRecordsCommand,
   isVisitRecordsCommand,
   setPendingLineInput,
@@ -76,6 +78,9 @@ async function handleEvent(event: LineEvent) {
     if (isVisitRecordsCommand(text)) {
       return replyVisitRecords(event.replyToken, conversationId, senderUserId);
     }
+    if (isTodayMedicationCommand(text)) {
+      return replyTodayMedication(event.replyToken, conversationId, senderUserId);
+    }
     if (/^CL-[0-9A-F]{6}$/i.test(text)) {
       const binding = await bindLineUser(conversationId, text, sourceType);
       if (!binding) {
@@ -105,6 +110,9 @@ async function handleEvent(event: LineEvent) {
     }
     if (action === "visits") {
       return replyVisitRecords(event.replyToken, conversationId, senderUserId, parsePage(data.get("page")));
+    }
+    if (action === "today_meds") {
+      return replyTodayMedication(event.replyToken, conversationId, senderUserId);
     }
     if (action === "visit") {
       return replyVisitDetail(
@@ -185,6 +193,19 @@ async function replyAgenda(
     return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
   }
   return reply(replyToken, [buildAgendaFlexMessage(careData)]);
+}
+
+async function replyTodayMedication(
+  replyToken: string,
+  conversationId: string,
+  senderUserId?: string,
+) {
+  const careData = await getCareLog();
+  const binding = findLineBinding(careData, conversationId, senderUserId);
+  if (!binding) {
+    return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
+  }
+  return reply(replyToken, [buildTodayMedicationFlexMessage(careData)]);
 }
 
 async function replyVisitRecords(

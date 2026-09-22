@@ -116,6 +116,10 @@ export function isVisitRecordsCommand(text: string) {
   return ["看診", "看診紀錄"].includes(text.trim());
 }
 
+export function isTodayMedicationCommand(text: string) {
+  return ["今日用藥", "用藥狀況"].includes(text.trim());
+}
+
 export async function createLineBindCode(userId: string, displayName: string) {
   const data = await getCareLog();
   const code = `CL-${randomBytes(3).toString("hex").toUpperCase()}`;
@@ -360,7 +364,7 @@ export function formatTodayRecordsSummary(data: CareLogData, today = new Date())
 export function buildMenuFlexMessage(): LineFlexMessage {
   return {
     type: "flex",
-    altText: "CareLog 選單：快速記錄、今日紀錄、未來行程與看診紀錄",
+    altText: "CareLog 選單：快速記錄、今日紀錄、今日用藥、未來行程與看診紀錄",
     contents: flexBubble([
       flexTitle("CareLog"),
       flexMuted("選擇要記錄或查看的項目"),
@@ -374,10 +378,117 @@ export function buildMenuFlexMessage(): LineFlexMessage {
       ]),
       flexSection("🔎 查看", [
         menuButton("📋 今日紀錄", "primary", "action=records"),
+        menuButton("💊 今日用藥", "secondary", "action=today_meds"),
         menuButton("📅 未來行程", "secondary", "action=agenda"),
         menuButton("🏥 看診紀錄", "secondary", "action=visits"),
       ]),
     ]),
+  };
+}
+
+export type TodayMedicationStatusItem = {
+  key: string;
+  title: string;
+  datetime: string;
+  taken: boolean;
+  reminderId?: string;
+  notes: string;
+};
+
+export function getTodayMedicationStatus(
+  data: CareLogData,
+  today = new Date(),
+): TodayMedicationStatusItem[] {
+  const todayKey = localDateKey(today);
+  const reminders = data.reminders.filter(
+    (reminder) =>
+      reminder.type === "吃藥" &&
+      (localDateKey(reminder.dueAt) === todayKey ||
+        (reminder.completedAt ? localDateKey(reminder.completedAt) === todayKey : false)),
+  );
+  const representedRecordIds = new Set<string>();
+  const items: TodayMedicationStatusItem[] = reminders
+    .map((reminder) => {
+      const taken = isMedicationReminderTaken(reminder, data);
+      const linked = reminder.linkedRecordId
+        ? data.records.find((record) => record.id === reminder.linkedRecordId)
+        : undefined;
+      if (linked?.type === "medication") representedRecordIds.add(linked.id);
+      for (const record of data.records) {
+        if (record.type === "medication" && record.notes.includes(`LINE 已用藥｜${reminder.id}`)) {
+          representedRecordIds.add(record.id);
+        }
+      }
+      return {
+        key: reminder.id,
+        title: drugNameFromReminder(reminder, data),
+        datetime: reminder.dueAt,
+        taken,
+        reminderId: reminder.id,
+        notes: reminder.notes.trim(),
+      };
+    })
+    .sort((a, b) => a.datetime.localeCompare(b.datetime));
+
+  const extraLogs = data.records
+    .filter(
+      (record): record is Extract<CareRecord, { type: "medication" }> =>
+        record.type === "medication" &&
+        localDateKey(record.datetime) === todayKey &&
+        !representedRecordIds.has(record.id),
+    )
+    .map((record) => ({
+      key: record.id,
+      title: record.drugName,
+      datetime: record.datetime,
+      taken: record.taken,
+      notes: record.notes.trim(),
+    }))
+    .sort((a, b) => a.datetime.localeCompare(b.datetime));
+
+  return [...items, ...extraLogs];
+}
+
+export function buildTodayMedicationFlexMessage(
+  data: CareLogData,
+  today = new Date(),
+): LineFlexMessage {
+  const items = getTodayMedicationStatus(data, today);
+  if (items.length === 0) {
+    return {
+      type: "flex",
+      altText: "今日沒有用藥提醒或紀錄",
+      contents: flexBubble([
+        flexTitle("今日用藥"),
+        flexMuted("今日沒有用藥提醒或紀錄"),
+        flexMuted("可用選單新增吃藥紀錄，或到 CareLog 設定提醒。"),
+      ]),
+    };
+  }
+
+  const takenCount = items.filter((item) => item.taken).length;
+  const pendingCount = items.length - takenCount;
+  const bubbles = chunkForFlex(items).map((chunkItems, index, all) => {
+    const extra =
+      index === all.length - 1 && items.length > recordsShownLimit()
+        ? items.length - recordsShownLimit()
+        : 0;
+    const rows = chunkItems.flatMap((item, rowIndex) => [
+      ...(rowIndex === 0 ? [] : [flexSeparator()]),
+      todayMedicationFlexRow(item),
+    ]);
+    return flexBubble([
+      flexTitle(all.length > 1 ? `今日用藥（${index + 1}/${all.length}）` : "今日用藥"),
+      flexMuted(`已用藥 ${takenCount} 項｜尚未 ${pendingCount} 項`),
+      ...rows,
+      ...(extra > 0 ? [flexMuted(`…還有 ${extra} 項，請到 CareLog 查看完整列表。`)] : []),
+    ]);
+  });
+
+  return {
+    type: "flex",
+    altText: truncateAlt(`今日用藥：已用藥 ${takenCount} 項，尚未 ${pendingCount} 項。`),
+    contents: bubbles.length === 1 ? bubbles[0] : { type: "carousel", contents: bubbles },
   };
 }
 
@@ -854,6 +965,40 @@ function agendaTimestamp(value: string) {
   return new Date(value).getTime();
 }
 
+function isMedicationReminderTaken(reminder: CareReminder, data: CareLogData) {
+  if (reminder.completed) return true;
+  return data.records.some(
+    (record) =>
+      record.type === "medication" &&
+      record.taken &&
+      record.notes.includes(`LINE 已用藥｜${reminder.id}`),
+  );
+}
+
+function todayMedicationFlexRow(item: TodayMedicationStatusItem) {
+  const contents: unknown[] = [];
+  if (!item.taken && item.reminderId) {
+    contents.push(
+      menuButton("✅ 已用藥", "primary", `action=complete_med&id=${encodeURIComponent(item.reminderId)}`),
+    );
+  }
+  contents.push(
+    { type: "text", text: item.title, weight: "bold", size: "md", wrap: true },
+    { type: "text", text: formatReminderTime(item.datetime), size: "sm", color: "#666666" },
+    {
+      type: "text",
+      text: item.taken ? "已用藥" : "尚未",
+      size: "sm",
+      weight: "bold",
+      color: item.taken ? "#0F766E" : "#B45309",
+    },
+  );
+  if (item.notes && item.notes !== item.title) {
+    contents.push({ type: "text", text: item.notes, size: "sm", wrap: true });
+  }
+  return { type: "box", layout: "vertical", spacing: "xs", contents };
+}
+
 function reminderFlexRow(reminder: CareReminder) {
   const contents: unknown[] = [];
   if (reminder.type === "吃藥") {
@@ -969,6 +1114,14 @@ function formatSpo2(value: number) {
 function toLocalInput(date: Date) {
   const offset = date.getTimezoneOffset();
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}
+
+function localDateKey(value: string | Date) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return toLocalInput(date).slice(0, 10);
 }
 
 function createId() {

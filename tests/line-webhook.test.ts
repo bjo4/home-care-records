@@ -299,6 +299,61 @@ test("line webhook stays quiet except for commands, bind codes, and pending inpu
       assert.match(emptyMessage?.altText ?? "", /看診/);
     });
 
+    await t.test("today medication command and postback reply with status flex", async () => {
+      const current = await getCareLog(filePath);
+      await saveCareLog(
+        {
+          ...current,
+          reminders: [
+            {
+              id: "rem-today-med",
+              type: "吃藥",
+              dueAt: `${toLocalDateKey(new Date())}T08:00`,
+              recurrence: "none",
+              notes: "心律整錠",
+              completed: false,
+              recordedBy: "Warren",
+              createdAt: "2026-09-20T08:00:00.000Z",
+            },
+          ],
+        },
+        filePath,
+      );
+
+      replies.length = 0;
+      const command = await postWebhook(secret, [
+        textEvent("r-today-meds-text", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "今日用藥"),
+      ]);
+      assert.equal(command.status, 200);
+      assert.equal(lineReplies(replies)[0]?.body.messages?.[0]?.type, "flex");
+      assert.match(lineReplies(replies)[0]?.body.messages?.[0]?.altText ?? "", /用藥/);
+
+      replies.length = 0;
+      const alias = await postWebhook(secret, [
+        textEvent("r-today-meds-alias", {
+          type: "user",
+          userId: "Uone",
+        }, "用藥狀況"),
+      ]);
+      assert.equal(alias.status, 200);
+      assert.equal(lineReplies(replies)[0]?.body.messages?.[0]?.type, "flex");
+
+      replies.length = 0;
+      const postback = await postWebhook(secret, [
+        postbackEvent("r-today-meds-postback", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "action=today_meds"),
+      ]);
+      assert.equal(postback.status, 200);
+      assert.equal(lineReplies(replies)[0]?.body.messages?.[0]?.type, "flex");
+    });
+
     await t.test("medication taken postback completes, logs, and stays idempotent in group and 1:1", async () => {
       const current = await getCareLog(filePath);
       await saveCareLog(
@@ -480,4 +535,9 @@ async function postWebhook(secret: string, events: unknown[]) {
 
 function lineReplies(replies: LineReplyCall[]) {
   return replies.filter((item) => item.url.includes("https://api.line.me/v2/bot/message/reply"));
+}
+
+function toLocalDateKey(date: Date) {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10);
 }

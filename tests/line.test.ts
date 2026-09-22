@@ -13,6 +13,7 @@ import {
   buildAgendaFlexMessage,
   buildDueRemindersFlexMessage,
   buildMenuFlexMessage,
+  buildTodayMedicationFlexMessage,
   buildTodayRecordsFlexMessage,
   buildVisitDetailFlexMessage,
   buildVisitRecordsFlexMessage,
@@ -26,6 +27,7 @@ import {
   getLinePushTargets,
   isAgendaCommand,
   isLineMenuCommand,
+  isTodayMedicationCommand,
   isTodayRecordsCommand,
   isVisitRecordsCommand,
   setPendingLineInput,
@@ -314,8 +316,18 @@ test("menu flex uses emoji labels and includes 未來行程與看診紀錄 under
   const visitButtons = buttons.filter((button) => button.data === "action=visits");
   assert.equal(visitButtons.length, 1);
   assert.equal(visitButtons[0]?.label, "🏥 看診紀錄");
+
+  const todayMedButtons = buttons.filter((button) => button.data === "action=today_meds");
+  assert.equal(todayMedButtons.length, 1);
+  assert.equal(todayMedButtons[0]?.label, "💊 今日用藥");
   assert.equal(buttons.some((button) => button.label === "顯示紀錄"), false);
   assert.equal(collectFlexSeparators(menu) >= 1, true);
+});
+
+test("today medication commands accept 今日用藥 aliases", () => {
+  assert.equal(isTodayMedicationCommand("今日用藥"), true);
+  assert.equal(isTodayMedicationCommand("用藥狀況"), true);
+  assert.equal(isTodayMedicationCommand("今日紀錄"), false);
 });
 
 test("agenda commands accept 未來行程 aliases", () => {
@@ -930,6 +942,90 @@ test("completing a medication reminder from LINE logs taken medicine and is idem
     else process.env.CARELOG_DATA_FILE = previousDataFile;
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("today medication flex lists due meds with taken status and 已用藥 button", () => {
+  const today = new Date(2026, 8, 22, 12, 0, 0);
+  const empty = buildTodayMedicationFlexMessage(emptyCareLogData(), today);
+  assert.equal(empty.type, "flex");
+  assert.match(empty.altText, /今日.*用藥|沒有/);
+  const emptyTexts = collectFlexTexts(empty);
+  assert.equal(emptyTexts.some((text) => /沒有|尚無/.test(text)), true);
+  assert.equal(collectFlexButtons(empty).some((button) => button.label === "✅ 已用藥"), false);
+
+  const pendingMed = {
+    id: "rem-pending",
+    type: "吃藥" as const,
+    dueAt: "2026-09-22T08:00",
+    recurrence: "daily" as const,
+    notes: "心律整錠",
+    completed: false,
+    recordedBy: "Warren",
+    createdAt: "2026-09-20T08:00:00.000Z",
+  };
+  const takenMed = {
+    id: "rem-taken",
+    type: "吃藥" as const,
+    dueAt: "2026-09-22T21:00",
+    recurrence: "none" as const,
+    notes: "甲狀腺×2",
+    completed: true,
+    completedAt: "2026-09-22T21:05:00.000Z",
+    completedBy: "姐姐",
+    recordedBy: "Warren",
+    createdAt: "2026-09-20T08:00:00.000Z",
+  };
+  const otherDay = {
+    id: "rem-other-day",
+    type: "吃藥" as const,
+    dueAt: "2026-09-21T08:00",
+    recurrence: "none" as const,
+    notes: "昨天的藥",
+    completed: false,
+    recordedBy: "Warren",
+    createdAt: "2026-09-20T08:00:00.000Z",
+  };
+  const tempReminder = {
+    id: "rem-temp",
+    type: "量體溫" as const,
+    dueAt: "2026-09-22T08:10",
+    recurrence: "none" as const,
+    notes: "",
+    completed: false,
+    recordedBy: "Warren",
+    createdAt: "2026-09-20T08:00:00.000Z",
+  };
+
+  const flex = buildTodayMedicationFlexMessage(
+    {
+      ...emptyCareLogData(),
+      reminders: [pendingMed, takenMed, otherDay, tempReminder],
+      records: [
+        createRecord("medication", {
+          datetime: "2026-09-22T07:15",
+          drugName: "臨時止痛",
+          taken: true,
+          confirmedBy: "爸爸",
+        }),
+      ],
+    },
+    today,
+  );
+  const texts = collectFlexTexts(flex);
+  assert.equal(texts.some((text) => text.includes("心律整錠")), true);
+  assert.equal(texts.some((text) => text.includes("甲狀腺×2")), true);
+  assert.equal(texts.some((text) => text.includes("臨時止痛")), true);
+  assert.equal(texts.some((text) => text.includes("昨天的藥")), false);
+  assert.equal(texts.includes("量體溫"), false);
+  assert.equal(texts.includes("尚未"), true);
+  assert.equal(texts.includes("已用藥"), true);
+
+  const buttons = collectFlexButtons(flex);
+  const takenButtons = buttons.filter((button) => button.label === "✅ 已用藥");
+  assert.equal(takenButtons.length, 1);
+  assert.match(takenButtons[0]?.data ?? "", /action=complete_med/);
+  assert.match(takenButtons[0]?.data ?? "", /id=rem-pending/);
+  assert.equal(buttons.some((button) => button.data.includes("rem-taken")), false);
 });
 
 test("due reminder flex uses a carousel when there are many items", () => {
