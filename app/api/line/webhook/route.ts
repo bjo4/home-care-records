@@ -9,6 +9,7 @@ import {
   buildTodayRecordsFlexMessage,
   buildVisitDetailFlexMessage,
   buildVisitRecordsFlexMessage,
+  completeMedicationReminderFromLine,
   createCareRecordFromLineText,
   findLineBinding,
   getLineConversation,
@@ -114,6 +115,14 @@ async function handleEvent(event: LineEvent) {
         parsePage(data.get("page")),
       );
     }
+    if (action === "complete_med") {
+      return replyCompleteMedication(
+        event.replyToken,
+        conversationId,
+        senderUserId,
+        data.get("id"),
+      );
+    }
     const kind = data.get("type") as
       | "temperature"
       | "bloodPressure"
@@ -209,6 +218,34 @@ async function replyVisitDetail(
     return replyText(replyToken, "找不到這筆看診紀錄。可用選單再開一次看診紀錄。");
   }
   return reply(replyToken, [buildVisitDetailFlexMessage(visit, page)]);
+}
+
+async function replyCompleteMedication(
+  replyToken: string,
+  conversationId: string,
+  senderUserId?: string,
+  reminderId?: string | null,
+) {
+  const careData = await getCareLog();
+  const binding = findLineBinding(careData, conversationId, senderUserId);
+  if (!binding) {
+    return replyText(replyToken, "請先在 CareLog 帳號頁產生 LINE 綁定碼，並在這個對話傳送綁定碼給我。");
+  }
+  const id = reminderId?.trim();
+  if (!id) {
+    return replyText(replyToken, "找不到這則提醒。");
+  }
+  const result = await completeMedicationReminderFromLine(id, binding.displayName);
+  if (result.status === "completed") {
+    return replyText(replyToken, `已標記已用藥，並記錄「${result.drugName}」。`);
+  }
+  if (result.status === "already_completed") {
+    return replyText(replyToken, "這則用藥提醒已標記完成，不會重複記錄。");
+  }
+  if (result.status === "not_medication") {
+    return replyText(replyToken, "這則提醒不是用藥提醒。");
+  }
+  return replyText(replyToken, "找不到這則提醒。");
 }
 
 function parsePage(value: string | null) {

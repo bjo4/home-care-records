@@ -15,6 +15,12 @@ import {
 } from "@/lib/care-records";
 import { addCareRecord, getCareLog, getDueReminders, saveCareLog } from "@/lib/care-store";
 
+export type CompleteMedicationReminderResult =
+  | { status: "completed"; drugName: string }
+  | { status: "already_completed" }
+  | { status: "not_found" }
+  | { status: "not_medication" };
+
 export type LineEventSource = {
   type?: string;
   userId?: string;
@@ -214,6 +220,85 @@ export async function consumePendingLineInput(conversationId: string) {
     linePendingInputs: data.linePendingInputs.filter((item) => item.lineUserId !== conversationId),
   });
   return pending;
+}
+
+export function drugNameFromReminder(reminder: CareReminder, data: CareLogData) {
+  if (reminder.linkedRecordId) {
+    const linkedRecord = data.records.find((record) => record.id === reminder.linkedRecordId);
+    if (linkedRecord?.type === "medication" && linkedRecord.drugName.trim()) {
+      return linkedRecord.drugName.trim();
+    }
+    const linkedOrder = data.medicationOrders.find((order) => order.id === reminder.linkedRecordId);
+    if (linkedOrder?.drugName.trim()) {
+      return linkedOrder.drugName.trim();
+    }
+  }
+  const notes = reminder.notes.trim();
+  return notes || reminder.type;
+}
+
+export async function completeMedicationReminderFromLine(
+  reminderId: string,
+  confirmedBy: string,
+): Promise<CompleteMedicationReminderResult> {
+  const data = await getCareLog();
+  const reminder = data.reminders.find((item) => item.id === reminderId);
+  if (!reminder) return { status: "not_found" };
+  if (reminder.type !== "吃藥") return { status: "not_medication" };
+
+  const alreadyLogged = data.records.some(
+    (record) => record.type === "medication" && record.notes.includes(`LINE 已用藥｜${reminder.id}`),
+  );
+  if (reminder.completed || alreadyLogged) {
+    if (!reminder.completed) {
+      const now = new Date().toISOString();
+      await saveCareLog({
+        ...data,
+        reminders: data.reminders.map((item) =>
+          item.id === reminderId
+            ? {
+                ...item,
+                completed: true,
+                completedAt: now,
+                completedBy: confirmedBy,
+                lastEditedBy: confirmedBy,
+                lastEditedAt: now,
+              }
+            : item,
+        ),
+      });
+    }
+    return { status: "already_completed" };
+  }
+
+  const now = new Date();
+  const drugName = drugNameFromReminder(reminder, data);
+  const record = createRecord("medication", {
+    datetime: toLocalInput(now),
+    drugName,
+    taken: true,
+    confirmedBy,
+    notes: `LINE 已用藥｜${reminder.id}`,
+  });
+  const iso = now.toISOString();
+  await saveCareLog({
+    ...data,
+    records: [...data.records, record],
+    reminders: data.reminders.map((item) =>
+      item.id === reminderId
+        ? {
+            ...item,
+            completed: true,
+            completedAt: iso,
+            completedBy: confirmedBy,
+            lastEditedBy: confirmedBy,
+            lastEditedAt: iso,
+            linkedRecordId: record.id,
+          }
+        : item,
+    ),
+  });
+  return { status: "completed", drugName };
 }
 
 export async function createCareRecordFromLineText(
@@ -770,10 +855,16 @@ function agendaTimestamp(value: string) {
 }
 
 function reminderFlexRow(reminder: CareReminder) {
-  const contents: unknown[] = [
+  const contents: unknown[] = [];
+  if (reminder.type === "吃藥") {
+    contents.push(
+      menuButton("✅ 已用藥", "primary", `action=complete_med&id=${encodeURIComponent(reminder.id)}`),
+    );
+  }
+  contents.push(
     { type: "text", text: reminder.type, weight: "bold", size: "md", wrap: true },
     { type: "text", text: formatReminderTime(reminder.dueAt), size: "sm", color: "#666666" },
-  ];
+  );
   if (reminder.notes.trim()) {
     contents.push({ type: "text", text: reminder.notes, size: "sm", wrap: true });
   }

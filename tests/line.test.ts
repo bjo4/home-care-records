@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { bootstrapUsersIfEmpty } from "../lib/auth";
-import { createRecord, type VisitRecord } from "../lib/care-records";
+import { createRecord, type CareLogData, type VisitRecord } from "../lib/care-records";
 import { addCareRecord, emptyCareLogData, getCareLog, saveCareLog } from "../lib/care-store";
 import {
   bindLineUser,
@@ -16,8 +16,10 @@ import {
   buildTodayRecordsFlexMessage,
   buildVisitDetailFlexMessage,
   buildVisitRecordsFlexMessage,
+  completeMedicationReminderFromLine,
   createCareRecordFromLineText,
   createLineBindCode,
+  drugNameFromReminder,
   findLineBinding,
   formatTodayRecordsSummary,
   getLineConversation,
@@ -799,6 +801,135 @@ test("due reminder flex lists titles and times, and skips empty push", () => {
   assert.equal(texts.includes("吃藥"), true);
   assert.equal(texts.some((text) => text.includes("晚餐前")), true);
   assert.equal(texts.some((text) => /\d{2}:\d{2}/.test(text)), true);
+
+  const buttons = collectFlexButtons(flex);
+  const takenButtons = buttons.filter((button) => button.label === "✅ 已用藥");
+  assert.equal(takenButtons.length, 1);
+  assert.equal(takenButtons[0]?.style, "primary");
+  assert.match(takenButtons[0]?.data ?? "", /action=complete_med/);
+  assert.match(takenButtons[0]?.data ?? "", /(?:^|&)id=r2(?:&|$)/);
+  assert.equal(
+    buttons.some((button) => button.data.includes("id=r1")),
+    false,
+  );
+});
+
+test("drug name is taken from linked medication record, then notes, then type", () => {
+  const empty = emptyCareLogData();
+  const reminder = {
+    id: "r-med",
+    type: "吃藥" as const,
+    dueAt: "2026-09-22T08:00",
+    recurrence: "none" as const,
+    notes: "早餐前",
+    completed: false,
+    recordedBy: "Warren",
+    createdAt: "2026-09-20T08:00:00.000Z",
+  };
+  assert.equal(drugNameFromReminder(reminder, empty), "早餐前");
+  assert.equal(drugNameFromReminder({ ...reminder, notes: "  " }, empty), "吃藥");
+
+  const withOrder: CareLogData = {
+    ...empty,
+    medicationOrders: [
+      {
+        id: "ord-1",
+        drugName: "心律整錠",
+        dose: "1 錠",
+        frequency: "每日",
+        route: "口服",
+        scheduleHint: "早餐前",
+        startDate: "2026-09-01",
+        notes: "",
+        precautions: "",
+        status: "進行中",
+        recordedBy: "Warren",
+        createdAt: "2026-09-01T00:00:00.000Z",
+      },
+    ],
+  };
+  assert.equal(
+    drugNameFromReminder({ ...reminder, linkedRecordId: "ord-1" }, withOrder),
+    "心律整錠",
+  );
+
+  const linkedMed = createRecord("medication", {
+    datetime: "2026-09-20T07:10",
+    drugName: "甲狀腺×2",
+    taken: true,
+    confirmedBy: "姐姐",
+  });
+  const withRecord: CareLogData = { ...empty, records: [linkedMed] };
+  assert.equal(
+    drugNameFromReminder({ ...reminder, linkedRecordId: linkedMed.id, notes: "早餐前" }, withRecord),
+    "甲狀腺×2",
+  );
+});
+
+test("completing a medication reminder from LINE logs taken medicine and is idempotent", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-med-taken-"));
+  const filePath = path.join(dir, "carelog.json");
+  const previousDataFile = process.env.CARELOG_DATA_FILE;
+
+  try {
+    process.env.CARELOG_DATA_FILE = filePath;
+    await saveCareLog({
+      ...emptyCareLogData(),
+      reminders: [
+        {
+          id: "rem-med",
+          type: "吃藥",
+          dueAt: "2026-09-22T08:00",
+          recurrence: "daily",
+          notes: "心律整錠",
+          completed: false,
+          recordedBy: "Warren",
+          createdAt: "2026-09-20T08:00:00.000Z",
+        },
+        {
+          id: "rem-temp",
+          type: "量體溫",
+          dueAt: "2026-09-22T08:10",
+          recurrence: "none",
+          notes: "",
+          completed: false,
+          recordedBy: "Warren",
+          createdAt: "2026-09-20T08:00:00.000Z",
+        },
+      ],
+    });
+
+    const first = await completeMedicationReminderFromLine("rem-med", "姐姐");
+    assert.equal(first.status, "completed");
+    if (first.status === "completed") assert.equal(first.drugName, "心律整錠");
+
+    const afterFirst = await getCareLog(filePath);
+    const reminder = afterFirst.reminders.find((item) => item.id === "rem-med");
+    assert.equal(reminder?.completed, true);
+    assert.equal(reminder?.completedBy, "姐姐");
+    const meds = afterFirst.records.filter((record) => record.type === "medication");
+    assert.equal(meds.length, 1);
+    assert.equal(meds[0] && meds[0].type === "medication" ? meds[0].drugName : "", "心律整錠");
+    assert.equal(meds[0] && meds[0].type === "medication" ? meds[0].taken : false, true);
+    assert.equal(meds[0] && meds[0].type === "medication" ? meds[0].confirmedBy : "", "姐姐");
+
+    const second = await completeMedicationReminderFromLine("rem-med", "爸爸");
+    assert.equal(second.status, "already_completed");
+    const afterSecond = await getCareLog(filePath);
+    assert.equal(afterSecond.records.filter((record) => record.type === "medication").length, 1);
+    assert.equal(afterSecond.reminders.find((item) => item.id === "rem-med")?.completedBy, "姐姐");
+
+    const other = await completeMedicationReminderFromLine("rem-temp", "姐姐");
+    assert.equal(other.status, "not_medication");
+    assert.equal((await getCareLog(filePath)).reminders.find((item) => item.id === "rem-temp")?.completed, false);
+    assert.equal((await getCareLog(filePath)).records.length, 1);
+
+    assert.equal((await completeMedicationReminderFromLine("missing", "姐姐")).status, "not_found");
+  } finally {
+    if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
+    else process.env.CARELOG_DATA_FILE = previousDataFile;
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("due reminder flex uses a carousel when there are many items", () => {

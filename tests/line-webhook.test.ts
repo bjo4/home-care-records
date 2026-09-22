@@ -299,6 +299,113 @@ test("line webhook stays quiet except for commands, bind codes, and pending inpu
       assert.match(emptyMessage?.altText ?? "", /看診/);
     });
 
+    await t.test("medication taken postback completes, logs, and stays idempotent in group and 1:1", async () => {
+      const current = await getCareLog(filePath);
+      await saveCareLog(
+        {
+          ...current,
+          reminders: [
+            {
+              id: "rem-med-group",
+              type: "吃藥",
+              dueAt: "2026-09-22T08:00",
+              recurrence: "none",
+              notes: "心律整錠",
+              completed: false,
+              recordedBy: "Warren",
+              createdAt: "2026-09-20T08:00:00.000Z",
+            },
+            {
+              id: "rem-med-user",
+              type: "吃藥",
+              dueAt: "2026-09-22T08:10",
+              recurrence: "none",
+              linkedRecordId: "ord-line",
+              notes: "早餐前",
+              completed: false,
+              recordedBy: "Warren",
+              createdAt: "2026-09-20T08:00:00.000Z",
+            },
+            {
+              id: "rem-temp",
+              type: "量體溫",
+              dueAt: "2026-09-22T08:20",
+              recurrence: "none",
+              notes: "",
+              completed: false,
+              recordedBy: "Warren",
+              createdAt: "2026-09-20T08:00:00.000Z",
+            },
+          ],
+          medicationOrders: [
+            {
+              id: "ord-line",
+              drugName: "甲狀腺×2",
+              dose: "2 錠",
+              frequency: "每日",
+              route: "口服",
+              scheduleHint: "早餐前",
+              startDate: "2026-09-01",
+              notes: "",
+              precautions: "",
+              status: "進行中",
+              recordedBy: "Warren",
+              createdAt: "2026-09-01T00:00:00.000Z",
+            },
+          ],
+        },
+        filePath,
+      );
+
+      replies.length = 0;
+      const groupTaken = await postWebhook(secret, [
+        postbackEvent("r-med-taken-group", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "action=complete_med&id=rem-med-group"),
+      ]);
+      assert.equal(groupTaken.status, 200);
+      assert.match(lineReplies(replies)[0]?.body.messages?.[0]?.text ?? "", /已標記已用藥|已記錄/);
+      const afterGroup = await getCareLog(filePath);
+      assert.equal(afterGroup.reminders.find((item) => item.id === "rem-med-group")?.completed, true);
+      assert.equal(afterGroup.reminders.find((item) => item.id === "rem-med-group")?.completedBy, "Warren");
+      const groupMeds = afterGroup.records.filter((record) => record.type === "medication");
+      assert.equal(groupMeds.length, 1);
+      assert.equal(groupMeds[0] && groupMeds[0].type === "medication" ? groupMeds[0].drugName : "", "心律整錠");
+      assert.equal(groupMeds[0] && groupMeds[0].type === "medication" ? groupMeds[0].taken : false, true);
+      assert.equal(groupMeds[0] && groupMeds[0].type === "medication" ? groupMeds[0].confirmedBy : "", "Warren");
+
+      replies.length = 0;
+      const groupAgain = await postWebhook(secret, [
+        postbackEvent("r-med-taken-group-again", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "action=complete_med&id=rem-med-group"),
+      ]);
+      assert.equal(groupAgain.status, 200);
+      assert.match(lineReplies(replies)[0]?.body.messages?.[0]?.text ?? "", /已標記完成|不會重複/);
+      const afterAgain = await getCareLog(filePath);
+      assert.equal(afterAgain.records.filter((record) => record.type === "medication").length, 1);
+      assert.equal(afterAgain.reminders.find((item) => item.id === "rem-temp")?.completed, false);
+
+      replies.length = 0;
+      const userTaken = await postWebhook(secret, [
+        postbackEvent("r-med-taken-user", {
+          type: "user",
+          userId: "Uone",
+        }, "action=complete_med&id=rem-med-user"),
+      ]);
+      assert.equal(userTaken.status, 200);
+      assert.match(lineReplies(replies)[0]?.body.messages?.[0]?.text ?? "", /已標記已用藥|已記錄/);
+      const afterUser = await getCareLog(filePath);
+      assert.equal(afterUser.reminders.find((item) => item.id === "rem-med-user")?.completed, true);
+      const userMed = afterUser.records.filter((record) => record.type === "medication").at(-1);
+      assert.equal(userMed && userMed.type === "medication" ? userMed.drugName : "", "甲狀腺×2");
+      assert.equal(userMed && userMed.type === "medication" ? userMed.confirmedBy : "", "Warren");
+    });
+
     await t.test("join welcome still replies once", async () => {
       replies.length = 0;
       const response = await postWebhook(secret, [
