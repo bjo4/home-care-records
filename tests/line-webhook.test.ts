@@ -107,6 +107,105 @@ test("line webhook stays quiet except for commands, bind codes, and pending inpu
       assert.match(messages[0]?.body.messages?.[0]?.altText ?? "", /CareLog/);
     });
 
+    await t.test("invalid pending input replies with an example and keeps pending", async () => {
+      replies.length = 0;
+      await setPendingLineInput("Cfamily-group", "bloodPressure");
+      const before = (await getCareLog(filePath)).records.length;
+      const response = await postWebhook(secret, [
+        textEvent("r-pending-bad", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "120"),
+      ]);
+      assert.equal(response.status, 200);
+      const messages = lineReplies(replies);
+      assert.equal(messages.length, 1);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /格式不正確/);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /120\/80/);
+      const saved = await getCareLog(filePath);
+      assert.equal(saved.records.length, before);
+      assert.equal(saved.linePendingInputs[0]?.kind, "bloodPressure");
+    });
+
+    await t.test("cancel clears pending and replies without saving", async () => {
+      replies.length = 0;
+      await setPendingLineInput("Cfamily-group", "temperature");
+      const before = (await getCareLog(filePath)).records.length;
+      const response = await postWebhook(secret, [
+        textEvent("r-cancel", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "取消"),
+      ]);
+      assert.equal(response.status, 200);
+      const messages = lineReplies(replies);
+      assert.equal(messages.length, 1);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /取消/);
+      const saved = await getCareLog(filePath);
+      assert.equal(saved.records.length, before);
+      assert.equal(saved.linePendingInputs.length, 0);
+    });
+
+    await t.test("menu clears pending and still replies with the menu flex", async () => {
+      replies.length = 0;
+      await setPendingLineInput("Cfamily-group", "bloodGlucose");
+      const response = await postWebhook(secret, [
+        textEvent("r-menu-clear", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "選單"),
+      ]);
+      assert.equal(response.status, 200);
+      const messages = lineReplies(replies);
+      assert.equal(messages.length, 1);
+      assert.equal(messages[0]?.body.messages?.[0]?.type, "flex");
+      assert.match(messages[0]?.body.messages?.[0]?.altText ?? "", /CareLog/);
+      assert.equal((await getCareLog(filePath)).linePendingInputs.length, 0);
+    });
+
+    await t.test("natural phrase creates one record and confirms the value", async () => {
+      replies.length = 0;
+      const before = (await getCareLog(filePath)).records.length;
+      const response = await postWebhook(secret, [
+        textEvent("r-natural", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "體溫 36.9"),
+      ]);
+      assert.equal(response.status, 200);
+      const messages = lineReplies(replies);
+      assert.equal(messages.length, 1);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /已記錄/);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /體溫/);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /36\.9/);
+      const saved = await getCareLog(filePath);
+      assert.equal(saved.records.length, before + 1);
+      assert.equal(saved.records.at(-1)?.type, "temperature");
+      assert.equal(saved.records.at(-1)?.notes, "LINE text log");
+    });
+
+    await t.test("invalid natural phrase replies with an example instead of staying silent", async () => {
+      replies.length = 0;
+      const before = (await getCareLog(filePath)).records.length;
+      const response = await postWebhook(secret, [
+        textEvent("r-natural-bad", {
+          type: "group",
+          groupId: "Cfamily-group",
+          userId: "Usender",
+        }, "血壓120"),
+      ]);
+      assert.equal(response.status, 200);
+      const messages = lineReplies(replies);
+      assert.equal(messages.length, 1);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /格式不正確/);
+      assert.match(messages[0]?.body.messages?.[0]?.text ?? "", /120\/80/);
+      assert.equal((await getCareLog(filePath)).records.length, before);
+    });
+
     await t.test("group pending input still records and replies", async () => {
       replies.length = 0;
       await setPendingLineInput("Cfamily-group", "temperature");

@@ -225,6 +225,242 @@ test("line text without pending or binding is silent instead of nagging", async 
   }
 });
 
+test("pending quick log rejects invalid values, keeps pending, and includes an example", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-pending-invalid-"));
+  const filePath = path.join(dir, "carelog.json");
+  const previousDataFile = process.env.CARELOG_DATA_FILE;
+
+  try {
+    process.env.CARELOG_DATA_FILE = filePath;
+    await bootstrapUsersIfEmpty("warren:alpha:Warren", filePath);
+    const data = await getCareLog(filePath);
+    const code = await createLineBindCode(data.users[0].id, data.users[0].displayName);
+    await bindLineUser("line-user-invalid", code.code);
+
+    await setPendingLineInput("line-user-invalid", "temperature");
+    const badTemp = await createCareRecordFromLineText("line-user-invalid", "abc");
+    assert.equal(badTemp.ok, false);
+    assert.equal(badTemp.silent, undefined);
+    assert.match(badTemp.message, /格式不正確/);
+    assert.match(badTemp.message, /36\.8/);
+    assert.equal((await getCareLog(filePath)).records.length, 0);
+    assert.equal((await getCareLog(filePath)).linePendingInputs[0]?.kind, "temperature");
+
+    const outOfRange = await createCareRecordFromLineText("line-user-invalid", "99");
+    assert.equal(outOfRange.ok, false);
+    assert.match(outOfRange.message, /36\.8/);
+    assert.equal((await getCareLog(filePath)).records.length, 0);
+    assert.equal((await getCareLog(filePath)).linePendingInputs.length, 1);
+
+    const goodTemp = await createCareRecordFromLineText("line-user-invalid", "36.9");
+    assert.equal(goodTemp.ok, true);
+    assert.equal(goodTemp.message, "已新增紀錄。");
+    assert.equal((await getCareLog(filePath)).linePendingInputs.length, 0);
+
+    await setPendingLineInput("line-user-invalid", "bloodPressure");
+    for (const text of ["120", "abc/def", "999/10", "80/120"]) {
+      const invalid = await createCareRecordFromLineText("line-user-invalid", text);
+      assert.equal(invalid.ok, false, text);
+      assert.match(invalid.message, /格式不正確/);
+      assert.match(invalid.message, /120\/80/);
+      assert.equal((await getCareLog(filePath)).linePendingInputs[0]?.kind, "bloodPressure");
+    }
+    const beforeBp = (await getCareLog(filePath)).records.length;
+    const bp = await createCareRecordFromLineText("line-user-invalid", "120/80 72");
+    assert.equal(bp.ok, true);
+    const savedBp = (await getCareLog(filePath)).records.at(-1);
+    assert.equal(savedBp?.type, "bloodPressure");
+    assert.equal(savedBp && savedBp.type === "bloodPressure" ? savedBp.systolic : 0, 120);
+    assert.equal(savedBp && savedBp.type === "bloodPressure" ? savedBp.diastolic : 0, 80);
+    assert.equal(savedBp && savedBp.type === "bloodPressure" ? savedBp.pulse : 0, 72);
+    assert.equal(savedBp?.notes, "LINE quick log");
+    assert.equal((await getCareLog(filePath)).records.length, beforeBp + 1);
+    assert.equal((await getCareLog(filePath)).linePendingInputs.length, 0);
+
+    await setPendingLineInput("line-user-invalid", "bloodGlucose");
+    const badGlucose = await createCareRecordFromLineText("line-user-invalid", "午餐");
+    assert.equal(badGlucose.ok, false);
+    assert.match(badGlucose.message, /110 飯前/);
+    assert.equal((await getCareLog(filePath)).linePendingInputs[0]?.kind, "bloodGlucose");
+    const glucose = await createCareRecordFromLineText("line-user-invalid", "110 飯前");
+    assert.equal(glucose.ok, true);
+
+    await setPendingLineInput("line-user-invalid", "medication");
+    const badMed = await createCareRecordFromLineText("line-user-invalid", "否");
+    assert.equal(badMed.ok, false);
+    assert.match(badMed.message, /心律整錠 是/);
+    assert.equal((await getCareLog(filePath)).linePendingInputs.length, 1);
+  } finally {
+    if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
+    else process.env.CARELOG_DATA_FILE = previousDataFile;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("cancel and menu clear a pending quick log without creating a record", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-cancel-"));
+  const filePath = path.join(dir, "carelog.json");
+  const previousDataFile = process.env.CARELOG_DATA_FILE;
+
+  try {
+    process.env.CARELOG_DATA_FILE = filePath;
+    await bootstrapUsersIfEmpty("warren:alpha:Warren", filePath);
+    const data = await getCareLog(filePath);
+    const code = await createLineBindCode(data.users[0].id, data.users[0].displayName);
+    await bindLineUser("line-user-cancel", code.code);
+
+    await setPendingLineInput("line-user-cancel", "temperature");
+    const cancelled = await createCareRecordFromLineText("line-user-cancel", "取消");
+    assert.equal(cancelled.ok, false);
+    assert.equal(cancelled.silent, undefined);
+    assert.match(cancelled.message, /取消/);
+    assert.equal((await getCareLog(filePath)).records.length, 0);
+    assert.equal((await getCareLog(filePath)).linePendingInputs.length, 0);
+
+    await setPendingLineInput("line-user-cancel", "bloodPressure");
+    const menu = await createCareRecordFromLineText("line-user-cancel", "選單");
+    assert.equal(menu.ok, false);
+    assert.equal(menu.menu, true);
+    assert.equal((await getCareLog(filePath)).records.length, 0);
+    assert.equal((await getCareLog(filePath)).linePendingInputs.length, 0);
+
+    const cancelWithoutPending = await createCareRecordFromLineText("line-user-cancel", "取消");
+    assert.equal(cancelWithoutPending.ok, false);
+    assert.equal(cancelWithoutPending.silent, true);
+  } finally {
+    if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
+    else process.env.CARELOG_DATA_FILE = previousDataFile;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bound text without pending creates one record from a natural phrase", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-natural-"));
+  const filePath = path.join(dir, "carelog.json");
+  const previousDataFile = process.env.CARELOG_DATA_FILE;
+
+  try {
+    process.env.CARELOG_DATA_FILE = filePath;
+    await bootstrapUsersIfEmpty("warren:alpha:Warren", filePath);
+    const data = await getCareLog(filePath);
+    const code = await createLineBindCode(data.users[0].id, data.users[0].displayName);
+    await bindLineUser("line-user-natural", code.code);
+
+    const temperature = await createCareRecordFromLineText("line-user-natural", "體溫36.9");
+    assert.equal(temperature.ok, true);
+    assert.match(temperature.message, /已記錄/);
+    assert.match(temperature.message, /體溫/);
+    assert.match(temperature.message, /36\.9/);
+
+    const spaced = await createCareRecordFromLineText("line-user-natural", "體溫 37.1");
+    assert.equal(spaced.ok, true);
+    assert.match(spaced.message, /37\.1/);
+
+    const pressure = await createCareRecordFromLineText("line-user-natural", "血壓120/70");
+    assert.equal(pressure.ok, true);
+    assert.match(pressure.message, /血壓/);
+    assert.match(pressure.message, /120\/70/);
+
+    const pressurePulse = await createCareRecordFromLineText("line-user-natural", "血壓 120/80 72");
+    assert.equal(pressurePulse.ok, true);
+    assert.match(pressurePulse.message, /120\/80/);
+    assert.match(pressurePulse.message, /72/);
+
+    const glucoseDefault = await createCareRecordFromLineText("line-user-natural", "血糖110");
+    assert.equal(glucoseDefault.ok, true);
+    const glucoseTimed = await createCareRecordFromLineText("line-user-natural", "血糖 110 飯前");
+    assert.equal(glucoseTimed.ok, true);
+    assert.match(glucoseTimed.message, /110/);
+    assert.match(glucoseTimed.message, /飯前/);
+
+    const oxygen = await createCareRecordFromLineText("line-user-natural", "血氧98");
+    assert.equal(oxygen.ok, true);
+    assert.match(oxygen.message, /血氧/);
+    assert.match(oxygen.message, /98/);
+    const oxygenPulse = await createCareRecordFromLineText("line-user-natural", "血氧 98 72");
+    assert.equal(oxygenPulse.ok, true);
+    assert.match(oxygenPulse.message, /72/);
+
+    const medication = await createCareRecordFromLineText("line-user-natural", "吃藥 心律整錠");
+    assert.equal(medication.ok, true);
+    assert.match(medication.message, /心律整錠/);
+    assert.match(medication.message, /已吃/);
+    const skipped = await createCareRecordFromLineText("line-user-natural", "吃藥 心律整錠 否");
+    assert.equal(skipped.ok, true);
+    assert.match(skipped.message, /未吃/);
+
+    const english = await createCareRecordFromLineText("line-user-natural", "temp 36.6");
+    assert.equal(english.ok, true);
+    assert.match(english.message, /體溫/);
+    assert.match(english.message, /36\.6/);
+
+    const saved = await getCareLog(filePath);
+    assert.equal(saved.records.length, 11);
+    assert.equal(saved.records.filter((record) => record.type === "temperature").length, 3);
+    assert.equal(saved.records.filter((record) => record.type === "bloodPressure").length, 2);
+    const glucose = saved.records.filter((record) => record.type === "bloodGlucose");
+    assert.equal(glucose.length, 2);
+    assert.equal(glucose[0] && glucose[0].type === "bloodGlucose" ? glucose[0].mealTiming : "", "其他/未指定");
+    assert.equal(glucose[1] && glucose[1].type === "bloodGlucose" ? glucose[1].mealTiming : "", "飯前");
+    const meds = saved.records.filter((record) => record.type === "medication");
+    assert.equal(meds.length, 2);
+    assert.equal(meds[0] && meds[0].type === "medication" ? meds[0].taken : false, true);
+    assert.equal(meds[1] && meds[1].type === "medication" ? meds[1].taken : true, false);
+    assert.equal(saved.records.every((record) => record.notes === "LINE text log"), true);
+    assert.equal(saved.linePendingInputs.length, 0);
+
+    const mixed = await createCareRecordFromLineText("line-user-natural", "體溫36.9 血壓120/80");
+    assert.equal(mixed.ok, false);
+    assert.equal(mixed.silent, undefined);
+    assert.match(mixed.message, /格式不正確/);
+    assert.equal((await getCareLog(filePath)).records.length, 11);
+  } finally {
+    if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
+    else process.env.CARELOG_DATA_FILE = previousDataFile;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("natural phrase with an invalid value replies with an example and does not save", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-natural-invalid-"));
+  const filePath = path.join(dir, "carelog.json");
+  const previousDataFile = process.env.CARELOG_DATA_FILE;
+
+  try {
+    process.env.CARELOG_DATA_FILE = filePath;
+    await bootstrapUsersIfEmpty("warren:alpha:Warren", filePath);
+    const data = await getCareLog(filePath);
+    const code = await createLineBindCode(data.users[0].id, data.users[0].displayName);
+    await bindLineUser("line-user-natural-bad", code.code);
+
+    const temperature = await createCareRecordFromLineText("line-user-natural-bad", "體溫 abc");
+    assert.equal(temperature.ok, false);
+    assert.equal(temperature.silent, undefined);
+    assert.match(temperature.message, /格式不正確/);
+    assert.match(temperature.message, /36\.8/);
+
+    const pressure = await createCareRecordFromLineText("line-user-natural-bad", "血壓 120");
+    assert.equal(pressure.ok, false);
+    assert.match(pressure.message, /120\/80/);
+
+    const unbound = await createCareRecordFromLineText("line-user-stranger", "體溫36.9");
+    assert.equal(unbound.ok, false);
+    assert.equal(unbound.silent, true);
+
+    const chat = await createCareRecordFromLineText("line-user-natural-bad", "今晚吃什麼");
+    assert.equal(chat.ok, false);
+    assert.equal(chat.silent, true);
+
+    const saved = await getCareLog(filePath);
+    assert.equal(saved.records.length, 0);
+    assert.equal(saved.linePendingInputs.length, 0);
+  } finally {
+    if (previousDataFile === undefined) delete process.env.CARELOG_DATA_FILE;
+    else process.env.CARELOG_DATA_FILE = previousDataFile;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("group binding is preferred over sender user binding", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "carelog-line-prefer-"));
   const filePath = path.join(dir, "carelog.json");
