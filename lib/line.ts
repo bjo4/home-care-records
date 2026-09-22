@@ -250,9 +250,7 @@ export async function completeMedicationReminderFromLine(
   if (!reminder) return { status: "not_found" };
   if (reminder.type !== "吃藥") return { status: "not_medication" };
 
-  const alreadyLogged = data.records.some(
-    (record) => record.type === "medication" && record.notes.includes(`LINE 已用藥｜${reminder.id}`),
-  );
+  const alreadyLogged = data.records.some((record) => isLineTakenMedicationLog(record, reminder.id));
   if (reminder.completed || alreadyLogged) {
     if (!reminder.completed) {
       const now = new Date().toISOString();
@@ -297,7 +295,6 @@ export async function completeMedicationReminderFromLine(
             completedBy: confirmedBy,
             lastEditedBy: confirmedBy,
             lastEditedAt: iso,
-            linkedRecordId: record.id,
           }
         : item,
     ),
@@ -415,7 +412,7 @@ export function getTodayMedicationStatus(
         : undefined;
       if (linked?.type === "medication") representedRecordIds.add(linked.id);
       for (const record of data.records) {
-        if (record.type === "medication" && record.notes.includes(`LINE 已用藥｜${reminder.id}`)) {
+        if (isLineTakenMedicationLog(record, reminder.id)) {
           representedRecordIds.add(record.id);
         }
       }
@@ -965,14 +962,13 @@ function agendaTimestamp(value: string) {
   return new Date(value).getTime();
 }
 
+function isLineTakenMedicationLog(record: CareRecord, reminderId: string) {
+  return record.type === "medication" && record.notes === `LINE 已用藥｜${reminderId}`;
+}
+
 function isMedicationReminderTaken(reminder: CareReminder, data: CareLogData) {
   if (reminder.completed) return true;
-  return data.records.some(
-    (record) =>
-      record.type === "medication" &&
-      record.taken &&
-      record.notes.includes(`LINE 已用藥｜${reminder.id}`),
-  );
+  return data.records.some((record) => isLineTakenMedicationLog(record, reminder.id));
 }
 
 function todayMedicationFlexRow(item: TodayMedicationStatusItem) {

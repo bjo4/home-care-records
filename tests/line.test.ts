@@ -899,6 +899,17 @@ test("completing a medication reminder from LINE logs taken medicine and is idem
           createdAt: "2026-09-20T08:00:00.000Z",
         },
         {
+          id: "rem-med-group",
+          type: "吃藥",
+          dueAt: "2026-09-22T08:05",
+          recurrence: "none",
+          linkedRecordId: "ord-1",
+          notes: "早餐前",
+          completed: false,
+          recordedBy: "Warren",
+          createdAt: "2026-09-20T08:00:00.000Z",
+        },
+        {
           id: "rem-temp",
           type: "量體溫",
           dueAt: "2026-09-22T08:10",
@@ -907,6 +918,22 @@ test("completing a medication reminder from LINE logs taken medicine and is idem
           completed: false,
           recordedBy: "Warren",
           createdAt: "2026-09-20T08:00:00.000Z",
+        },
+      ],
+      medicationOrders: [
+        {
+          id: "ord-1",
+          drugName: "甲狀腺×2",
+          dose: "2 錠",
+          frequency: "每日",
+          route: "口服",
+          scheduleHint: "早餐前",
+          startDate: "2026-09-01",
+          notes: "",
+          precautions: "",
+          status: "進行中",
+          recordedBy: "Warren",
+          createdAt: "2026-09-01T00:00:00.000Z",
         },
       ],
     });
@@ -931,10 +958,17 @@ test("completing a medication reminder from LINE logs taken medicine and is idem
     assert.equal(afterSecond.records.filter((record) => record.type === "medication").length, 1);
     assert.equal(afterSecond.reminders.find((item) => item.id === "rem-med")?.completedBy, "姐姐");
 
+    const linked = await completeMedicationReminderFromLine("rem-med-group", "姐姐");
+    assert.equal(linked.status, "completed");
+    if (linked.status === "completed") assert.equal(linked.drugName, "甲狀腺×2");
+    const afterLinked = await getCareLog(filePath);
+    assert.equal(afterLinked.reminders.find((item) => item.id === "rem-med-group")?.linkedRecordId, "ord-1");
+    assert.equal(afterLinked.records.filter((record) => record.type === "medication").length, 2);
+
     const other = await completeMedicationReminderFromLine("rem-temp", "姐姐");
     assert.equal(other.status, "not_medication");
     assert.equal((await getCareLog(filePath)).reminders.find((item) => item.id === "rem-temp")?.completed, false);
-    assert.equal((await getCareLog(filePath)).records.length, 1);
+    assert.equal((await getCareLog(filePath)).records.length, 2);
 
     assert.equal((await completeMedicationReminderFromLine("missing", "姐姐")).status, "not_found");
   } finally {
